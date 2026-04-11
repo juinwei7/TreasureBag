@@ -1,0 +1,6 @@
+name: TreasureBag
+version: '$version'
+
+main: org.weiwei.treasureBag.Main
+api-version: '1.21.11'
+load: POSTWORLD

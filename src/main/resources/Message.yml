@@ -1,0 +1,50 @@
+# 通用常見訊息
+MESSAGE:
+  PREFIX: '§f〔隨身背包〕§r '
+  RELOAD_ALL: '§a已重新載入所有設定檔'
+  RELOAD_SINGLE: '§a已重新載入 {0} 設定檔'
+  RELOAD_NULL: '§c請輸入要重新載入的模組名稱'
+  NO_PERMISSION: '§c你沒有權限使用這個指令'
+  NO_PLAYER: '§c找不到這個玩家'
+  PLAYER_ONLY: '§c這個指令只能由玩家執行'
+  CONSOLE_ONLY: '§e這個指令只能由控制台使用'
+  LIMIT_COMMAND: '§c此指令僅限於 {0} 使用'
+  UNKNOWN_COMMAND: '§c未知的指令 {0}'
+  UNKNOWN_SUBCOMMAND: '§c未知的子指令 {0}'
+  NOT_ENOUGH_MONEY: '§c您的遊戲幣不足，需要&e {0}&c 遊戲幣'
+  NOT_ENOUGH_MONEY_TYPE: '§c您的{0}不足，需要&e {1}&c {2}'
+  MAIN_HAND_AIR: '§c您手上尚未持有任何物品'
+  FEATURE_NOT_ENABLED: '§c該功能未開放'
+  LIMIT_SERVER: '§c此功能尚未在此分流開放'
+  COOLDOWN_BAR: '§e冷卻中，請於 &b{0} 秒&e稍後再試'
+  INVALID_NUMBER: '§c無效的數字 {0}'
+  INVALID_ARGS: '§c參數不足'
+  NOTIFICATION_MANGER: '§c請截圖通知管理員'
+  TIME_FORMAT_ERROR: '§c時間格式錯誤，請使用 yyyy/MM/dd HH:mm:ss 格式'
+  PLUGIN_DISABLED: '§c系統重新加載中，請稍後再試'
+  ERROR: '§c發生錯誤 {0}'
+  SUCCESS: '§a執行成功 {0}'
+
+# 時間格式
+FORMAT:
+  TIME_S: 秒
+  TIME_M: 分鐘
+  TIME_H: 小時
+  TIME_D: 天
+  TIME_Y: 年
+  IS_NULL: '§c無'
+
+# 一般子指令
+COMMAND:
+  OPEN: 開啟隨身背包
+  RELOAD: 重新載入設定
+
+# 各選單
+MENU_TITLE:
+  ADMIN_MENU: '&1隨身背包: %player%'
+  VIEW_MENU: '§r       §r§9◆§3◆§9◆     §1§l隨身背包     §9◆§3◆§9◆'
+
+# 指令提示
+HELP:
+  FIRST_LINE: '&r&7           &r §a隨身背包 &r&7           &r'
+  HOVER: '&r&點擊以自動補上指令'

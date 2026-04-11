@@ -2,11 +2,15 @@ package org.weiwei.treasureBag;
 
 import lombok.Getter;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.weiwei.treasureBag.command.MainCommand;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.Message;
 
+import java.util.Set;
+
 public final class Main extends JavaPlugin {
 
+    private static final Set<String> COMMAND = Set.of("treasurebag", "bag");
 
     @Getter
     public static Main inst;
@@ -19,6 +23,9 @@ public final class Main extends JavaPlugin {
         configManager.loadConfig();
 
         Message.loadMessage();
+
+        MainCommand mainCommand = new MainCommand();
+        mainCommand.setup(COMMAND);
 
     }
 

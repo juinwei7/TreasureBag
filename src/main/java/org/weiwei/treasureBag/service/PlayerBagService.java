@@ -112,6 +112,11 @@ public class PlayerBagService {
         try {
             Player target = Bukkit.getPlayerExact(targetName);
             if (target != null) {
+                // 若目標玩家正在使用背包，拒絕開啟以避免並發 session 導致物品複製
+                if (SESSIONS.containsKey(target.getUniqueId())) {
+                    Message.sendPrefix(viewer, Message.MESSAGE__BAG_TARGET_IN_USE);
+                    return;
+                }
                 PlayerInfo playerInfo = REPOSITORY.getOrCreatePlayerInfo(target);
                 open(viewer, playerInfo, getMaxSlot(target), REPOSITORY.loadPlayerBags(playerInfo));
                 return;
@@ -123,7 +128,9 @@ public class PlayerBagService {
                 return;
             }
 
-            open(viewer, playerInfo, getMaxSlotFromConfig(), REPOSITORY.loadPlayerBags(playerInfo));
+            // 離線玩家：依現有資料推算 maxSlot，避免使用 getMaxSlotFromConfig() 造成 overflow
+            List<PlayerBag> playerBags = REPOSITORY.loadPlayerBags(playerInfo);
+            open(viewer, playerInfo, inferMaxSlot(playerBags), playerBags);
         } catch (Exception e) {
             Main.getInst().getLogger().severe("無法開啟玩家背包: " + targetName);
             e.printStackTrace();
@@ -133,6 +140,8 @@ public class PlayerBagService {
 
     /**
      * 內部通用開啟邏輯：建立 Session 並顯示第 0 頁
+     * 若觀看者已有活躍 session（例如管理員本身的背包還開著），
+     * 會先儲存並清除舊 session，避免舊 GUI 的物品被誤存入新目標的背包。
      *
      * @param viewer     查看者（可能不是背包擁有者）
      * @param playerInfo 背包擁有者資訊
@@ -143,6 +152,24 @@ public class PlayerBagService {
         if (playerInfo == null) {
             Message.sendPrefix(viewer, Message.MESSAGE__NO_PLAYER);
             return;
+        }
+
+        // 若觀看者已有活躍 session，先儲存舊 session 再建立新的，
+        // 避免 openPage() 觸發 InventoryCloseEvent 時將舊 GUI 物品誤存入新 session 的 playerInfo
+        BagSession oldSession = SESSIONS.remove(viewer.getUniqueId());
+        if (oldSession != null) {
+            try {
+                REPOSITORY.saveAllowedPlayerBags(
+                        oldSession.playerInfo(),
+                        toPlayerBags(oldSession.playerInfo(), oldSession.items(), oldSession.maxSlot()),
+                        oldSession.maxSlot()
+                );
+            } catch (Exception e) {
+                Main.getInst().getLogger().severe("無法保存舊背包（重新開啟時）: " + viewer.getName());
+                e.printStackTrace();
+            }
+            // 先關閉舊 GUI；觸發的 InventoryCloseEvent 因 session 已移除而直接 return，不會再次存檔
+            viewer.closeInventory();
         }
 
         Map<Integer, ItemStack> items = toItemMap(playerBags);
@@ -185,7 +212,14 @@ public class PlayerBagService {
     public static void switchPage(Player player, CustomGui gui, int page) {
         savePage(player, gui);
         PAGE_SWITCHING.add(player.getUniqueId());
-        openPage(player, page);
+        try {
+            openPage(player, page);
+        } catch (Exception e) {
+            // openPage 若拋出例外，確保 PAGE_SWITCHING 被清除；
+            // 否則後續任何關閉背包的操作都會被誤判為翻頁，永遠不存檔
+            PAGE_SWITCHING.remove(player.getUniqueId());
+            throw e;
+        }
     }
 
     /**
@@ -285,6 +319,7 @@ public class PlayerBagService {
     /**
      * 關閉背包：儲存本頁後將 Session 資料寫回資料庫
      * 若為翻頁觸發的關閉則只儲存不寫 DB
+     * Session 在寫入成功後才移除，確保 DB 失敗時仍可重試
      *
      * @param player 玩家
      * @param gui    當前 GUI
@@ -293,7 +328,7 @@ public class PlayerBagService {
         savePage(player, gui);
         if (PAGE_SWITCHING.remove(player.getUniqueId())) return;
 
-        BagSession session = SESSIONS.remove(player.getUniqueId());
+        BagSession session = SESSIONS.get(player.getUniqueId());
         if (session == null) return;
         try {
             REPOSITORY.saveAllowedPlayerBags(
@@ -301,6 +336,7 @@ public class PlayerBagService {
                     toPlayerBags(session.playerInfo(), session.items(), session.maxSlot()),
                     session.maxSlot()
             );
+            SESSIONS.remove(player.getUniqueId());
         } catch (Exception e) {
             Main.getInst().getLogger().severe("無法保存玩家背包: " + player.getName());
             e.printStackTrace();
@@ -323,6 +359,17 @@ public class PlayerBagService {
      */
     private static BagSession getSession(Player player) {
         return SESSIONS.get(player.getUniqueId());
+    }
+
+    /**
+     * 判斷指定 UUID 的玩家是否正在使用背包（有活躍的 BagSession）
+     * 供外部模組（如 TradeCommand）判斷是否存在並發衝突
+     *
+     * @param uuid 玩家 UUID
+     * @return true 表示玩家目前正在使用背包
+     */
+    public static boolean hasSession(UUID uuid) {
+        return SESSIONS.containsKey(uuid);
     }
 
     /**
@@ -477,6 +524,23 @@ public class PlayerBagService {
             playerBags.add(playerBag);
         }
         return playerBags;
+    }
+
+    /**
+     * 依現有背包資料推算 maxSlot（對齊至 PAGE_CONTENT_SIZE 的倍數）
+     * 用於離線玩家開啟背包時，避免使用 getMaxSlotFromConfig() 造成存入超出玩家實際權限的格位
+     *
+     * @param playerBags 從資料庫讀取的背包物品列表
+     * @return 推算出的 maxSlot，最低為 PAGE_CONTENT_SIZE
+     */
+    private static int inferMaxSlot(List<PlayerBag> playerBags) {
+        int maxSolder = playerBags.stream()
+                .filter(b -> b.getSolder() != null)
+                .mapToInt(b -> b.getSolder().intValue())
+                .max()
+                .orElse(-1);
+        if (maxSolder < 0) return PAGE_CONTENT_SIZE;
+        return ((maxSolder / PAGE_CONTENT_SIZE) + 1) * PAGE_CONTENT_SIZE;
     }
 
     /**

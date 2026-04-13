@@ -43,22 +43,23 @@ public class PlayerBagRepository {
             if (playerInfo != null) return playerInfo;
 
             try (PreparedStatement insert = connection.prepareStatement(
-                    "INSERT INTO player_info (player_name, player_uuid) VALUES (?, ?)",
-                    Statement.RETURN_GENERATED_KEYS
+                    "INSERT INTO player_info (player_name, player_uuid) VALUES (?, ?)"
             )) {
                 insert.setString(1, displayName);
                 insert.setString(2, uuid.toString());
                 insert.executeUpdate();
-
-                try (ResultSet keys = insert.getGeneratedKeys()) {
-                    if (keys.next()) return findPlayerInfo(connection, uuid);
-                }
+            } catch (Exception insertEx) {
+                // 並發情況下可能重複 INSERT（唯一鍵衝突），嘗試再次查詢
+                PlayerInfo retry = findPlayerInfo(connection, uuid);
+                if (retry != null) return retry;
+                throw insertEx;
             }
+
+            // INSERT 成功，以 UUID 查詢並回傳（不依賴 generated keys）
+            return findPlayerInfo(connection, uuid);
         } catch (Exception e) {
             throw new IllegalStateException("無法建立玩家背包資料: " + displayName, e);
         }
-
-        return null;
     }
 
     public List<PlayerInfo> loadPlayerInfos() {

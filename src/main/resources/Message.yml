@@ -29,6 +29,7 @@ MESSAGE:
   BAG_FORCE_HOVER: '§f執行 /treasurebag force，並將超出格物品掉落到地板上'
   BAG_FORCE_DROPPED: '§e已將 §f{0} §e格超出背包空間的物品掉落到地板上'
   BAG_CONTAINER_FORBIDDEN: '§c界伏盒、收納袋等可攜式容器不能放入隨身背包'
+  BAG_TARGET_IN_USE: '§c目標玩家目前正在使用背包，請等待對方關閉後再試'
 
 # 時間格式
 FORMAT:

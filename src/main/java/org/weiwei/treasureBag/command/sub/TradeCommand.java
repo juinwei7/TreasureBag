@@ -55,11 +55,12 @@ public class TradeCommand extends SubCommand {
                 Queue<String> queue = new ArrayDeque<>(uuidStrings);
                 PlayerBagRepository repository = new PlayerBagRepository();
                 AtomicInteger successCount = new AtomicInteger(0);
-                AtomicInteger skipCount   = new AtomicInteger(0);
-                AtomicInteger failCount   = new AtomicInteger(0);
+                AtomicInteger missingBackpackCount = new AtomicInteger(0);
+                AtomicInteger emptyBackpackCount = new AtomicInteger(0);
+                AtomicInteger failCount = new AtomicInteger(0);
 
                 processNext(sender, queue, repository, minepacks,
-                        total, successCount, skipCount, failCount);
+                        total, successCount, missingBackpackCount, emptyBackpackCount, failCount);
             });
         });
     }
@@ -67,10 +68,12 @@ public class TradeCommand extends SubCommand {
     /** 逐一取出 Queue 中的 UUID，串行處理，完成後才處理下一筆 */
     private void processNext(CommandSender sender, Queue<String> queue,
                              PlayerBagRepository repository, MinepacksPlugin minepacks,
-                             int total, AtomicInteger success, AtomicInteger skip, AtomicInteger fail) {
+                             int total, AtomicInteger success, AtomicInteger missingBackpack,
+                             AtomicInteger emptyBackpack, AtomicInteger fail) {
         if (queue.isEmpty()) {
             sender.sendMessage("§a背包轉移完成！§f成功: " + success.get()
-                    + " §7跳過: " + skip.get()
+                    + " §7無 Minepacks 背包: " + missingBackpack.get()
+                    + " §7空背包: " + emptyBackpack.get()
                     + " §c失敗: " + fail.get());
             return;
         }
@@ -89,7 +92,7 @@ public class TradeCommand extends SubCommand {
             fail.incrementAndGet();
             // 延遲 1 tick，防止同 tick 內同步遞迴
             Bukkit.getScheduler().runTaskLater(Main.getInst(), () ->
-                    processNext(sender, queue, repository, minepacks, total, success, skip, fail), 1L);
+                    processNext(sender, queue, repository, minepacks, total, success, missingBackpack, emptyBackpack, fail), 1L);
             return;
         }
 
@@ -99,10 +102,10 @@ public class TradeCommand extends SubCommand {
         minepacks.getBackpack(offlinePlayer, backpack -> {
             if (backpack == null) {
                 Main.getInst().getLogger().warning("[Trade] 找不到 " + uuid + " 的背包，跳過。");
-                skip.incrementAndGet();
+                missingBackpack.incrementAndGet();
                 // 延遲 1 tick，避免 null 路徑同步快速遞迴把 Minepacks pool 打爆
                 Bukkit.getScheduler().runTaskLater(Main.getInst(), () ->
-                        processNext(sender, queue, repository, minepacks, total, success, skip, fail), 1L);
+                        processNext(sender, queue, repository, minepacks, total, success, missingBackpack, emptyBackpack, fail), 1L);
                 return;
             }
 
@@ -114,9 +117,9 @@ public class TradeCommand extends SubCommand {
             }
 
             if (itemsToTransfer.isEmpty()) {
-                skip.incrementAndGet();
+                emptyBackpack.incrementAndGet();
                 Bukkit.getScheduler().runTaskLater(Main.getInst(), () ->
-                        processNext(sender, queue, repository, minepacks, total, success, skip, fail), 1L);
+                        processNext(sender, queue, repository, minepacks, total, success, missingBackpack, emptyBackpack, fail), 1L);
                 return;
             }
 
@@ -131,7 +134,7 @@ public class TradeCommand extends SubCommand {
                         fail.incrementAndGet();
                         // 修正 bug：原本只 return 會導致後續玩家卡住
                         Bukkit.getScheduler().runTaskLater(Main.getInst(), () ->
-                                processNext(sender, queue, repository, minepacks, total, success, skip, fail), 1L);
+                                processNext(sender, queue, repository, minepacks, total, success, missingBackpack, emptyBackpack, fail), 1L);
                         return;
                     }
 
@@ -173,7 +176,7 @@ public class TradeCommand extends SubCommand {
                 } finally {
                     // 回主執行緒，延遲 1 tick 再繼續下一筆
                     Bukkit.getScheduler().runTaskLater(Main.getInst(), () ->
-                            processNext(sender, queue, repository, minepacks, total, success, skip, fail), 1L);
+                            processNext(sender, queue, repository, minepacks, total, success, missingBackpack, emptyBackpack, fail), 1L);
                 }
             });
         });

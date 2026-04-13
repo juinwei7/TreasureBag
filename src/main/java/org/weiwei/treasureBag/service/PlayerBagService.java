@@ -211,6 +211,52 @@ public class PlayerBagService {
         return globalSlot >= gui.getMaxSlot();
     }
 
+    public static boolean isPortableContainer(ItemStack item) {
+        if (item == null || item.getType().isAir()) return false;
+
+        String typeName = item.getType().name();
+        return typeName.equals("SHULKER_BOX")
+                || typeName.endsWith("_SHULKER_BOX")
+                || typeName.equals("BUNDLE")
+                || typeName.endsWith("_BUNDLE");
+    }
+
+    public static int moveItemToBag(Player player, CustomGui gui, ItemStack source) {
+        BagSession session = getSession(player);
+        if (session == null || gui == null || source == null || source.getType().isAir()) return 0;
+
+        savePage(player, gui);
+
+        int originalAmount = source.getAmount();
+        ItemStack moving = source.clone();
+
+        for (int slot = 0; slot < session.maxSlot() && moving.getAmount() > 0; slot++) {
+            ItemStack existing = session.items().get(slot);
+            if (existing == null || existing.getType().isAir() || !existing.isSimilar(moving)) continue;
+
+            int maxStackSize = existing.getMaxStackSize();
+            int moveAmount = Math.min(maxStackSize - existing.getAmount(), moving.getAmount());
+            if (moveAmount <= 0) continue;
+
+            existing.setAmount(existing.getAmount() + moveAmount);
+            moving.setAmount(moving.getAmount() - moveAmount);
+        }
+
+        for (int slot = 0; slot < session.maxSlot() && moving.getAmount() > 0; slot++) {
+            ItemStack existing = session.items().get(slot);
+            if (existing != null && !existing.getType().isAir()) continue;
+
+            int moveAmount = Math.min(moving.getMaxStackSize(), moving.getAmount());
+            ItemStack placed = moving.clone();
+            placed.setAmount(moveAmount);
+            session.items().put(slot, placed);
+            moving.setAmount(moving.getAmount() - moveAmount);
+        }
+
+        fillContent(gui.getInventory(), session);
+        return originalAmount - moving.getAmount();
+    }
+
     /**
      * 將當前頁面的物品暫存回 Session（關閉或翻頁前呼叫）
      *
@@ -292,7 +338,7 @@ public class PlayerBagService {
                 continue;
             }
             ItemStack item = session.items().get(globalSlot);
-            if (item != null) inventory.setItem(slot, item.clone());
+            inventory.setItem(slot, item == null ? null : item.clone());
         }
     }
 

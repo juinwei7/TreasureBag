@@ -70,11 +70,11 @@ public class MainCommand implements CommandExecutor, TabCompleter {
     public boolean onCommand(CommandSender sender, Command arg1, String label, String[] args) {
         SenderType type = getType(sender);
         if (args.length == 0) {
-            if ("bag".equalsIgnoreCase(label) && sender instanceof Player player) {
+            if (sender instanceof Player player) {
                 PlayerBagService.open(player);
                 return true;
             }
-            sendHelp(sender);
+            Message.send(sender, Message.MESSAGE__PLAYER_ONLY);
             return true;
         }
         String cmd = args[0];

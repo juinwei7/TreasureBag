@@ -28,6 +28,7 @@ MESSAGE:
   BAG_FORCE_CLICK: '§e§l[點擊這裡強制開啟隨身背包]'
   BAG_FORCE_HOVER: '§f執行 /treasurebag force，並將超出格物品掉落到地板上'
   BAG_FORCE_DROPPED: '§e已將 §f{0} §e格超出背包空間的物品掉落到地板上'
+  BAG_CONTAINER_FORBIDDEN: '§c界伏盒、收納袋等可攜式容器不能放入隨身背包'
 
 # 時間格式
 FORMAT:

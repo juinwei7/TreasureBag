@@ -4,7 +4,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.List;
-import java.util.Map;
 
 public class ItemManage {
 
@@ -52,7 +51,7 @@ public class ItemManage {
      * @return ItemStack
      */
     public static ItemStack getDefaultItem() {
-        return createItem(Material.GRAY_STAINED_GLASS_PANE, " ", null, 300);
+        return createItem(Material.GRAY_STAINED_GLASS_PANE, " ", null, 0);
     }
 
 

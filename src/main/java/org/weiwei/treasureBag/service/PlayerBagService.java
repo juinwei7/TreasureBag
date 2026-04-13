@@ -1,6 +1,7 @@
 package org.weiwei.treasureBag.service;
 
 import org.bukkit.Material;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -39,14 +40,45 @@ public class PlayerBagService {
         try {
             int maxSlot = getMaxSlot(player);
             PlayerInfo playerInfo = REPOSITORY.getOrCreatePlayerInfo(player);
-            Map<Integer, ItemStack> items = toItemMap(REPOSITORY.loadPlayerBags(playerInfo));
-            SESSIONS.put(player.getUniqueId(), new BagSession(playerInfo, maxSlot, items));
-            openPage(player, 0);
+            open(player, playerInfo, maxSlot);
         } catch (Exception e) {
             Main.getInst().getLogger().severe("無法開啟玩家背包: " + player.getName());
             e.printStackTrace();
             Message.sendPrefix(player, Message.MESSAGE__ERROR, "無法開啟背包");
         }
+    }
+
+    public static void openOther(Player viewer, String targetName) {
+        try {
+            Player target = Bukkit.getPlayerExact(targetName);
+            if (target != null) {
+                open(viewer, REPOSITORY.getOrCreatePlayerInfo(target), getMaxSlot(target));
+                return;
+            }
+
+            PlayerInfo playerInfo = REPOSITORY.findPlayerInfoByName(targetName);
+            if (playerInfo == null) {
+                Message.sendPrefix(viewer, Message.MESSAGE__NO_PLAYER);
+                return;
+            }
+
+            open(viewer, playerInfo, getMaxSlotFromConfig());
+        } catch (Exception e) {
+            Main.getInst().getLogger().severe("無法開啟玩家背包: " + targetName);
+            e.printStackTrace();
+            Message.sendPrefix(viewer, Message.MESSAGE__ERROR, "無法開啟背包");
+        }
+    }
+
+    private static void open(Player viewer, PlayerInfo playerInfo, int maxSlot) {
+        if (playerInfo == null) {
+            Message.sendPrefix(viewer, Message.MESSAGE__NO_PLAYER);
+            return;
+        }
+
+        Map<Integer, ItemStack> items = toItemMap(REPOSITORY.loadPlayerBags(playerInfo));
+        SESSIONS.put(viewer.getUniqueId(), new BagSession(playerInfo, maxSlot, items));
+        openPage(viewer, 0);
     }
 
     public static void openPage(Player player, int page) {

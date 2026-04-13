@@ -83,6 +83,27 @@ public class PlayerBagRepository {
         return playerInfos;
     }
 
+    public PlayerInfo findPlayerInfoByName(String playerName) {
+        if (playerName == null || playerName.isEmpty()) return null;
+
+        try (Connection connection = DataBase.getConnection()) {
+            if (connection == null) return null;
+
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT id, player_name, player_uuid, created_at, last_update_at FROM player_info WHERE LOWER(player_name) = LOWER(?)"
+            )) {
+                statement.setString(1, playerName);
+
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    if (!resultSet.next()) return null;
+                    return mapPlayerInfo(resultSet);
+                }
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("無法讀取玩家資料: " + playerName, e);
+        }
+    }
+
     public List<PlayerBag> loadPlayerBags(PlayerInfo playerInfo) {
         List<PlayerBag> playerBags = new ArrayList<>();
         if (playerInfo == null || playerInfo.getPlayerUUID() == null) return playerBags;

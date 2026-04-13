@@ -28,8 +28,12 @@ public class PlayerBag {
      * 設定序列化物品
      */
     public void setItem(ItemStack item) {
+        String name = item.getType().name();
+        if (item.hasItemMeta()) {
+            name = item.getItemMeta().getDisplayName();
+        }
         this.serialize = ItemSerialize.itemToBase64(item);
-        this.itemName = item.getType().name();
+        this.itemName = name;
     }
 
 

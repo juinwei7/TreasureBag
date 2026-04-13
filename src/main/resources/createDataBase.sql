@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS `player_bag`
     player_uuid    VARCHAR(64) NOT NULL,
     solder         BIGINT NOT NULL,
     serialize      LONGTEXT NOT NULL,
-    itemName       VARCHAR(200),
+    itemName       TEXT,
     PRIMARY KEY (player_uuid, solder)
 );
 

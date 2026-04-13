@@ -13,7 +13,7 @@ import java.util.Set;
 
 public final class Main extends JavaPlugin {
 
-    private static final Set<String> COMMAND = Set.of("treasurebag");
+    private static final Set<String> COMMAND = Set.of("treasurebag", "bag");
 
     @Getter
     public static Main inst;

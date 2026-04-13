@@ -12,6 +12,7 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.weiwei.treasureBag.Main;
+import org.weiwei.treasureBag.command.sub.ForceCommand;
 import org.weiwei.treasureBag.command.sub.OpenCommand;
 import org.weiwei.treasureBag.command.sub.ReloadCommand;
 import org.weiwei.treasureBag.command.sub.TradeCommand;
@@ -40,6 +41,7 @@ public class MainCommand implements CommandExecutor, TabCompleter {
     public MainCommand() {
 
         new OpenCommand().registerCommand();
+        new ForceCommand().registerCommand();
         new ReloadCommand().registerCommand();
 
         new TradeCommand().registerCommand();

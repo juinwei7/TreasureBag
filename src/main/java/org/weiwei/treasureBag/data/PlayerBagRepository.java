@@ -172,6 +172,24 @@ public class PlayerBagRepository {
         }
     }
 
+    public void deletePlayerBagsFromSlot(PlayerInfo playerInfo, int startSlot) {
+        if (playerInfo == null || playerInfo.getPlayerUUID() == null) return;
+
+        try (Connection connection = DataBase.getConnection()) {
+            if (connection == null) return;
+
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "DELETE FROM player_bag WHERE player_uuid = ? AND solder >= ?"
+            )) {
+                statement.setString(1, playerInfo.getPlayerUUID().toString());
+                statement.setInt(2, startSlot);
+                statement.executeUpdate();
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("無法刪除玩家超出背包格資料: " + playerInfo.getPlayerName(), e);
+        }
+    }
+
     private PlayerInfo findPlayerInfo(Connection connection, UUID uuid) throws Exception {
         try (PreparedStatement select = connection.prepareStatement(
                 "SELECT id, player_name, player_uuid, created_at, last_update_at FROM player_info WHERE player_uuid = ?"

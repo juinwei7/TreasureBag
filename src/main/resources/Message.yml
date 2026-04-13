@@ -24,6 +24,10 @@ MESSAGE:
   PLUGIN_DISABLED: '§c系統重新加載中，請稍後再試'
   ERROR: '§c發生錯誤 {0}'
   SUCCESS: '§a執行成功 {0}'
+  BAG_SPACE_SHRINK: '§c你的隨身背包空間已縮小，§f{0} §c格超出目前可用範圍。若繼續開啟，超出的物品會掉落在地板上。'
+  BAG_FORCE_CLICK: '§e§l[點擊這裡強制開啟隨身背包]'
+  BAG_FORCE_HOVER: '§f執行 /treasurebag force，並將超出格物品掉落到地板上'
+  BAG_FORCE_DROPPED: '§e已將 §f{0} §e格超出背包空間的物品掉落到地板上'
 
 # 時間格式
 FORMAT:
@@ -38,6 +42,7 @@ FORMAT:
 COMMAND:
   OPEN: 開啟隨身背包
   RELOAD: 重新載入設定
+  FORCE: 強制開啟隨身背包
 
 ADMIN_MESSAGE:
   EDIT_DISABLED: '已停用'

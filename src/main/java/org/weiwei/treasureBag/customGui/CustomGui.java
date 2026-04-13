@@ -31,6 +31,12 @@ public class CustomGui implements InventoryHolder {
     @Setter
     private UUID tagerUuid;
 
+    @Setter
+    private int page;
+
+    @Setter
+    private int maxSlot;
+
 
 
     public CustomGui(GuiType type, Player player, String title) {

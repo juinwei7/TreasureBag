@@ -92,7 +92,7 @@ public abstract class SubCommand implements Comparable<SubCommand> {
     protected boolean canUsePermission(CommandSender sender) {
         if (!permissionRequired) return true; // 如果沒有設定權限，則默認可以使用
         if (sender instanceof Player player) {
-            String perm = "huAltar." + cmd;
+            String perm = "treasure." + cmd;
             return player.hasPermission(perm);
         }
         return true;

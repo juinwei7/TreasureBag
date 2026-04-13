@@ -12,7 +12,12 @@ import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.weiwei.treasureBag.Main;
+import org.weiwei.treasureBag.command.sub.OpenCommand;
+import org.weiwei.treasureBag.command.sub.ReloadCommand;
+import org.weiwei.treasureBag.command.sub.TradeCommand;
+import org.weiwei.treasureBag.service.PlayerBagService;
 import org.weiwei.treasureBag.util.Message;
+import org.weiwei.treasureBag.util.PlaceholderUtil;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,7 +39,10 @@ public class MainCommand implements CommandExecutor, TabCompleter {
     // 註冊主指令
     public MainCommand() {
 
+        new OpenCommand().registerCommand();
+        new ReloadCommand().registerCommand();
 
+        new TradeCommand().registerCommand();
     }
 
     // 註冊主指令
@@ -60,6 +68,10 @@ public class MainCommand implements CommandExecutor, TabCompleter {
     public boolean onCommand(CommandSender sender, Command arg1, String label, String[] args) {
         SenderType type = getType(sender);
         if (args.length == 0) {
+            if ("bag".equalsIgnoreCase(label) && sender instanceof Player player) {
+                PlayerBagService.open(player);
+                return true;
+            }
             sendHelp(sender);
             return true;
         }

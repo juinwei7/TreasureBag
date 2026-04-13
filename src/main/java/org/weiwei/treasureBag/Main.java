@@ -1,8 +1,11 @@
 package org.weiwei.treasureBag;
 
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.weiwei.treasureBag.command.MainCommand;
+import org.weiwei.treasureBag.dataBase.DataBase;
+import org.weiwei.treasureBag.listener.PlayerBagListener;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.Message;
 
@@ -10,7 +13,7 @@ import java.util.Set;
 
 public final class Main extends JavaPlugin {
 
-    private static final Set<String> COMMAND = Set.of("treasurebag", "bag");
+    private static final Set<String> COMMAND = Set.of("treasurebag");
 
     @Getter
     public static Main inst;
@@ -23,14 +26,17 @@ public final class Main extends JavaPlugin {
         configManager.loadConfig();
 
         Message.loadMessage();
+        DataBase.initialize();
 
         MainCommand mainCommand = new MainCommand();
         mainCommand.setup(COMMAND);
+
+        Bukkit.getPluginManager().registerEvents(new PlayerBagListener(), this);
 
     }
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
+        DataBase.close();
     }
 }

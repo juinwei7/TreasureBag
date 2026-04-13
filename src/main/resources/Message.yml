@@ -39,10 +39,14 @@ COMMAND:
   OPEN: 開啟隨身背包
   RELOAD: 重新載入設定
 
+ADMIN_MESSAGE:
+  EDIT_DISABLED: '已停用'
+
 # 各選單
 MENU_TITLE:
   ADMIN_MENU: '&1隨身背包: %player%'
   VIEW_MENU: '§r       §r§9◆§3◆§9◆     §1§l隨身背包     §9◆§3◆§9◆'
+  BAG_MENU: '§1§l隨身背包 §7- 第 {0}/{1} 頁'
 
 # 指令提示
 HELP:

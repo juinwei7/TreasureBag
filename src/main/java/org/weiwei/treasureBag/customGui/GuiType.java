@@ -15,6 +15,9 @@ import org.weiwei.treasureBag.util.Message;
 public enum GuiType {
 
 
+    // 隨身背包
+    BAG_MENU(Message.MENU_TITLE__BAG_MENU, 54),
+
     // 查看禮包
     VIEW_MENU(Message.MENU_TITLE__VIEW_MENU, 54),
 

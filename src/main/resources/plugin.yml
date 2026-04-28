@@ -8,3 +8,4 @@ load: POSTWORLD
 commands:
   treasurebag: {}
   bag: {}
+  bp: {}

@@ -1,3 +1,7 @@
+# 資料庫類型: mysql 或 sqlite
+# 舊版設定檔沒有這個欄位時，會預設使用 mysql
+type: mysql
+
 mysql:
   host: "127.0.0.1"
   port: 3306
@@ -5,7 +9,6 @@ mysql:
   user: "root"
   password: "xxxx"
 
-redis:
-  host: "127.0.0.1"
-  port: 6379
-  password: "xxxx"
+sqlite:
+  # 資料庫檔案，存放於 plugins/TreasureBag/ 底下
+  file: "treasure_bag.db"

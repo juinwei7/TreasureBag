@@ -1,6 +1,6 @@
 # TreasureBag
 
-Paper 伺服器用的隨身背包插件。玩家可以透過指令開啟自己的隨身背包，背包容量依權限決定，資料會儲存在 MySQL。
+Paper 伺服器用的隨身背包插件。玩家可以透過指令開啟自己的隨身背包，背包容量依權限決定，資料可儲存在 MySQL 或 SQLite。
 
 ## 功能
 
@@ -25,7 +25,7 @@ Paper 伺服器用的隨身背包插件。玩家可以透過指令開啟自己�
 
 - Java 21
 - Paper `1.21.11`
-- MySQL
+- MySQL 或 SQLite（SQLite 不需額外安裝，driver 已內含於插件 jar）
 - Minepacks：只有執行 `/treasurebag trade` 轉移時需要
 
 ## 安裝
@@ -76,7 +76,12 @@ treasure-bag.VIP2
 
 ### DataBase.yml
 
+`type` 決定使用哪個資料庫，可填 `mysql` 或 `sqlite`。
+
 ```yaml
+# 資料庫類型: mysql 或 sqlite
+type: mysql
+
 mysql:
   host: "127.0.0.1"
   port: 3306
@@ -84,13 +89,18 @@ mysql:
   user: "root"
   password: "password"
 
-redis:
-  host: "127.0.0.1"
-  port: 6379
-  password: "password"
+sqlite:
+  # 資料庫檔案，存放於 plugins/TreasureBag/ 底下
+  file: "treasure_bag.db"
 ```
 
-目前背包資料使用 MySQL。Redis 設定保留給其他功能或後續擴充。
+選 `sqlite` 時不需要填 mysql 區塊，也不必另外安裝資料庫或 driver，插件會在 `plugins/TreasureBag/` 建立資料庫檔案。
+
+SQLite driver 已打包進 jar，僅保留 Mac ARM 與 Linux x86_64 / aarch64 的 native library。若要部署到 Windows 或 Alpine(musl) 伺服器，需調整 `pom.xml` 中 maven-shade-plugin 的 filter 後重新建置。
+
+升級舊版時若 `DataBase.yml` 沒有 `type` 欄位，會自動沿用 MySQL。
+
+兩種後端的資料互不相通，目前沒有提供互轉工具。
 
 ## 指令
 
@@ -164,7 +174,7 @@ redis:
 
 ## 資料表
 
-插件啟動時會執行 `createDataBase.sql` 建立資料表。
+插件啟動時會依 `type` 執行對應的建表 SQL（`sql/mysql.sql` 或 `sql/sqlite.sql`）建立資料表。
 
 主要資料表：
 

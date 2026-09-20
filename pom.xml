@@ -39,6 +39,28 @@
                         <goals>
                             <goal>shade</goal>
                         </goals>
+                        <configuration>
+                            <!-- sqlite-jdbc 內含 24 個平台的 native library（共約 13MB），
+                                 只保留開發機（Mac ARM）與伺服器（Linux x86_64 / aarch64）需要的三個。
+                                 若要部署到 Windows 或 Alpine(musl) 伺服器，請移除對應的 exclude。
+                                 注意：不可對 org.sqlite 做 relocate，native library 的資源路徑會對不上。 -->
+                            <filters>
+                                <filter>
+                                    <artifact>org.xerial:sqlite-jdbc</artifact>
+                                    <excludes>
+                                        <exclude>org/sqlite/native/Windows/**</exclude>
+                                        <exclude>org/sqlite/native/Linux-Musl/**</exclude>
+                                        <exclude>org/sqlite/native/Linux-Android/**</exclude>
+                                        <exclude>org/sqlite/native/FreeBSD/**</exclude>
+                                        <exclude>org/sqlite/native/Mac/x86_64/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/arm*/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/x86/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/ppc64/**</exclude>
+                                        <exclude>org/sqlite/native/Linux/riscv64/**</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -119,11 +141,11 @@
             <version>5.1.0</version>
         </dependency>
 
-        <!--  Redis  -->
+        <!--  SQLite  -->
         <dependency>
-            <groupId>redis.clients</groupId>
-            <artifactId>jedis</artifactId>
-            <version>5.2.0</version>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.50.3.0</version>
         </dependency>
 
         <!--    placeholderApi    -->

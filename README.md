@@ -193,3 +193,23 @@ TreasureBag 支援從 **Minepacks** 插件匯入既有的背包資料，方便�
 - `player_bag`：玩家 UUID、格位、序列化物品、物品名稱
 
 背包物品以 Bukkit `ItemStack` 序列化後存入資料庫。
+
+## 注意事項
+
+- **不要提交真實的資料庫密碼。** `DataBase.yml` 內建的 `xxxx` 只是佔位符，正式帳密只放在伺服器的 `plugins/TreasureBag/DataBase.yml`，切勿寫進版控。
+- 本插件僅支援 Paper `1.21.11`（`api-version` 已鎖定），其他伺服器核心或版本未經測試。
+- SQLite 為單一寫入者，插件已限制連線池為 1；請勿手動調高，否則交易可能拿到 `SQLITE_BUSY`。
+- 背包物品以 Bukkit `ItemStack` 序列化儲存，屬版本綁定格式；跨 Minecraft 大版本升級後，舊資料不保證能正確反序列化，升級前請先備份資料庫。
+
+## 授權
+
+本專案採用 [MIT License](LICENSE) 授權，歡迎自由使用、修改與散布，唯需保留版權與授權聲明。
+
+發布的 `TreasureBag.jar` 會打包以下第三方函式庫，各自的授權如下：
+
+| 函式庫 | 授權 |
+| --- | --- |
+| [HikariCP](https://github.com/brettwooldridge/HikariCP) | Apache-2.0 |
+| [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc) | Apache-2.0 |
+
+Paper API、VaultAPI、PlaceholderAPI、Minepacks API 為 `provided` 依賴，不會打包進 jar。

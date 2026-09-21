@@ -26,7 +26,7 @@ Paper 伺服器用的隨身背包插件。玩家可以透過指令開啟自己�
 - Java 21
 - Paper `1.21.11`
 - MySQL 或 SQLite（SQLite 不需額外安裝，driver 已內含於插件 jar）
-- Minepacks：只有執行 `/treasurebag trade` 轉移時需要
+- Minepacks：選用，只有從 Minepacks 匯入資料（`/treasurebag trade`）時需要一起安裝
 
 ## 安裝
 
@@ -112,7 +112,8 @@ sqlite:
 | `/treasurebag open <玩家>` | 開啟指定玩家背包 | `treasure-bag.admin` |
 | `/treasurebag force` | 強制開啟自己的背包，並處理超出容量的物品 | 無 |
 | `/treasurebag reload` | 重新載入設定檔 | `treasure.reload` |
-| `/treasurebag trade` | 從 Minepacks 轉移背包資料 | `treasure.trade` |
+| `/treasurebag trade` | 顯示 Minepacks 轉移的確認提示 | `treasure.trade` |
+| `/treasurebag trade confirm` | 確認並執行 Minepacks 轉移 | `treasure.trade` |
 
 `/bag` 是 `/treasurebag` 的別名，因此也可以使用 `/bag open`、`/bag force`。
 
@@ -157,7 +158,17 @@ sqlite:
 
 ## Minepacks 轉移
 
-`/treasurebag trade` 會讀取資料庫中的玩家清單，逐一嘗試從 Minepacks 讀取背包，並把 Minepacks 中的物品轉入 TreasureBag。
+TreasureBag 支援從 **Minepacks** 插件匯入既有的背包資料，方便從 Minepacks 遷移過來。
+
+使用前置條件：
+
+1. 伺服器同時安裝 Minepacks 與 TreasureBag。
+2. 兩者都連得到各自的資料來源。
+3. 建議在玩家較少時執行（轉移期間會有背包資料寫入）。
+
+為避免誤觸，`/treasurebag trade` 需要二次確認：直接輸入只會顯示警告與確認提示，實際執行要輸入 `/treasurebag trade confirm`（或點擊提示訊息）。
+
+確認後，指令會讀取 TreasureBag 資料庫中的玩家清單，逐一嘗試從 Minepacks 讀取背包，並把 Minepacks 中的物品「附加」到該玩家的 TreasureBag 背包（不會覆蓋既有物品，會接在後面的空格位）。
 
 完成後會輸出：
 

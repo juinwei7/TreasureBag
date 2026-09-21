@@ -5,6 +5,9 @@ main: org.weiwei.treasureBag.Main
 api-version: '1.21.11'
 load: POSTWORLD
 
+# Minepacks 為選用：只有 /treasurebag trade 轉移時需要，宣告 softdepend 確保載入順序
+softdepend: [Minepacks]
+
 commands:
   treasurebag: {}
   bag: {}

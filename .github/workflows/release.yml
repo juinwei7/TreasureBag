@@ -1,0 +1,61 @@
+name: Release
+
+# 推送形如 v1.2.0 的 tag 時，自動建置 jar 並發布 GitHub Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+# gh release create 需要寫入 repo 內容的權限
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Derive version from tag
+        id: version
+        run: |
+          # 去掉開頭的 v：v1.2.0 -> 1.2.0，作為 Maven / jar / plugin.yml 版本
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VERSION"
+
+      - name: Set project version
+        run: >
+          mvn -B -ntp
+          org.codehaus.mojo:versions-maven-plugin:2.17.1:set
+          -DnewVersion="${{ steps.version.outputs.version }}"
+          -DgenerateBackupPoms=false
+
+      - name: Build
+        run: mvn -B -ntp clean package
+
+      - name: Stage jar
+        run: |
+          set -e
+          # finalName 固定為 TreasureBag，重新命名為帶版本的發布檔名
+          test -f target/TreasureBag.jar
+          cp target/TreasureBag.jar "TreasureBag-${{ steps.version.outputs.version }}.jar"
+          # 確認 jar 內 plugin.yml 版本已正確替換（非 ${project.version} / $version 字面值）
+          unzip -p target/TreasureBag.jar plugin.yml | grep -F "version: '${{ steps.version.outputs.version }}'"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${GITHUB_REF_NAME}"
+          "TreasureBag-${{ steps.version.outputs.version }}.jar"
+          --title "${GITHUB_REF_NAME}"
+          --generate-notes

@@ -30,6 +30,7 @@ MESSAGE:
   BAG_FORCE_DROPPED: '§e已將 §f{0} §e格超出背包空間的物品掉落到地板上'
   BAG_CONTAINER_FORBIDDEN: '§c界伏盒、收納袋等可攜式容器不能放入隨身背包'
   BAG_TARGET_IN_USE: '§c目標玩家目前正在使用背包，請等待對方關閉後再試'
+  DB_TYPE_CHANGED: '§e偵測到 DataBase.yml 的 type 已改為 §f{0}§e，資料庫設定需重啟伺服器才會生效（目前仍使用 §f{1}§e）'
 
 # 時間格式
 FORMAT:

@@ -27,11 +27,11 @@ public class PlayerBagRepository {
         String displayName = playerName != null ? playerName : uuid.toString();
 
         try (Connection connection = DataBase.getConnection()) {
-            if (connection == null) return null;
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
 
             if (playerName != null) {
                 try (PreparedStatement update = connection.prepareStatement(
-                        "UPDATE player_info SET player_name = ? WHERE player_uuid = ?"
+                        "UPDATE player_info SET player_name = ?, last_update_at = CURRENT_TIMESTAMP WHERE player_uuid = ?"
                 )) {
                     update.setString(1, playerName);
                     update.setString(2, uuid.toString());
@@ -66,7 +66,7 @@ public class PlayerBagRepository {
         List<PlayerInfo> playerInfos = new ArrayList<>();
 
         try (Connection connection = DataBase.getConnection()) {
-            if (connection == null) return playerInfos;
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
 
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT id, player_name, player_uuid, created_at, last_update_at FROM player_info"
@@ -88,7 +88,7 @@ public class PlayerBagRepository {
         if (playerName == null || playerName.isEmpty()) return null;
 
         try (Connection connection = DataBase.getConnection()) {
-            if (connection == null) return null;
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
 
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT id, player_name, player_uuid, created_at, last_update_at FROM player_info WHERE LOWER(player_name) = LOWER(?)"
@@ -110,7 +110,7 @@ public class PlayerBagRepository {
         if (playerInfo == null || playerInfo.getPlayerUUID() == null) return playerBags;
 
         try (Connection connection = DataBase.getConnection()) {
-            if (connection == null) return playerBags;
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
 
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT player_uuid, solder, serialize, itemName FROM player_bag WHERE player_uuid = ?"
@@ -134,7 +134,7 @@ public class PlayerBagRepository {
         if (playerInfo == null || playerInfo.getPlayerUUID() == null || maxSlot <= 0) return;
 
         try (Connection connection = DataBase.getConnection()) {
-            if (connection == null) return;
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
 
             try {
                 connection.setAutoCommit(false);
@@ -177,7 +177,7 @@ public class PlayerBagRepository {
         if (playerInfo == null || playerInfo.getPlayerUUID() == null) return;
 
         try (Connection connection = DataBase.getConnection()) {
-            if (connection == null) return;
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
 
             try (PreparedStatement statement = connection.prepareStatement(
                     "DELETE FROM player_bag WHERE player_uuid = ? AND solder >= ?"

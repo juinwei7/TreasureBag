@@ -6,18 +6,15 @@ import lombok.Getter;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.weiwei.treasureBag.Main;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 
@@ -61,17 +58,19 @@ public class DataBase {
         }
 
         /**
-         * 解析設定檔的 type 欄位；無法辨識或未設定時回傳 MYSQL，
-         * 讓升級前就存在的 DataBase.yml 維持原本行為
+         * 解析設定檔的 type 欄位。
+         * 未設定（升級前的舊 DataBase.yml 沒有此欄位）→ 回傳 MYSQL 維持原本行為；
+         * 有設定但無法辨識（打錯字）→ 拋出例外讓啟動失敗，
+         * 避免靜默退回 MySQL 把資料寫進錯誤的後端。
          */
         private static DataBaseType parse(String raw) {
             if (raw == null || raw.isBlank()) return MYSQL;
 
-            for (DataBaseType dataBaseType : values()) {
-                if (dataBaseType.name().equalsIgnoreCase(raw.trim())) return dataBaseType;
+            try {
+                return valueOf(raw.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("未知的資料庫類型 [ " + raw + " ]，請使用 mysql 或 sqlite");
             }
-            logger.warning("未知的資料庫類型 [ " + raw + " ]，改用 mysql");
-            return MYSQL;
         }
     }
 
@@ -79,13 +78,13 @@ public class DataBase {
     private static void loadDataBase() {
         File file = new File(Main.getInst().getDataFolder(), "DataBase.yml");
         if (!file.exists()) {
-            Main.getInst().getLogger().info("Create DataBase.yml");
+            logger.info("Create DataBase.yml");
             Main.getInst().saveResource("DataBase.yml", true);
         }
         dataBaseConfig = YamlConfiguration.loadConfiguration(file);
     }
 
-    // 獲取資料庫連線
+    // 獲取資料庫連線；連線池不可用時回傳 null（Repository 端會視為錯誤拋出例外）
     public static Connection getConnection() {
         if (dataSource == null) {
             logger.severe("資料庫連線池尚未初始化，請檢查 DataBase.yml 與啟動日誌");
@@ -103,23 +102,33 @@ public class DataBase {
 
     /**
      * 依 DataBase.yml 的 type 初始化對應的連線池並建表
+     *
+     * @return false 表示連線池或建表失敗，呼叫端（Main.onEnable）應停用插件，
+     *         避免插件在沒有資料表的狀態下運作
      */
     public static boolean initialize() {
         DataBase.loadDataBase();
 
         if (dataBaseConfig == null) {
-            logger.warning("資料庫連線失敗");
+            logger.severe("無法讀取 DataBase.yml");
             return false;
         }
 
-        type = DataBaseType.parse(dataBaseConfig.getString("type"));
+        // 重複初始化（如重新載入）時先關閉舊連線池，避免洩漏
+        close();
 
         try {
-            HikariConfig config = (type == DataBaseType.SQLITE) ? buildSqliteConfig() : buildMysqlConfig();
-            dataSource = new HikariDataSource(config);
-            logger.info(type.name() + " database connected successfully!");
+            type = DataBaseType.parse(dataBaseConfig.getString("type"));
 
-            createTable();
+            HikariConfig config = switch (type) {
+                case MYSQL -> buildMysqlConfig();
+                case SQLITE -> buildSqliteConfig();
+            };
+            dataSource = new HikariDataSource(config);
+
+            if (!createTable()) return false;
+
+            logger.info(type.name() + " database connected successfully!");
             return true;
         } catch (Exception e) {
             logger.severe("Failed to initialize " + type.name() + " connection: " + e.getMessage());
@@ -162,13 +171,17 @@ public class DataBase {
      * 否則 {@code saveAllowedPlayerBags()} 的交易會與其他連線互搶並拿到 SQLITE_BUSY。
      */
     private static HikariConfig buildSqliteConfig() {
-        File folder = Main.getInst().getDataFolder();
-        if (!folder.exists() && !folder.mkdirs()) {
-            throw new IllegalStateException("無法建立插件資料夾: " + folder.getAbsolutePath());
-        }
-
         String fileName = dataBaseConfig.getString("sqlite.file", "treasure_bag.db");
-        File dataBaseFile = new File(folder, fileName);
+
+        // 相對路徑掛在插件資料夾下；絕對路徑尊重原值
+        File dataBaseFile = new File(fileName);
+        if (!dataBaseFile.isAbsolute()) {
+            dataBaseFile = new File(Main.getInst().getDataFolder(), fileName);
+        }
+        File parent = dataBaseFile.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IllegalStateException("無法建立資料庫目錄: " + parent.getAbsolutePath());
+        }
 
         HikariConfig config = new HikariConfig();
         // journal_mode=WAL 讓讀寫不互相阻塞；busy_timeout 讓短暫鎖競爭自動重試而非直接失敗
@@ -180,7 +193,8 @@ public class DataBase {
 
         config.setMaximumPoolSize(1);
         config.setMinimumIdle(1);
-        config.setConnectionTimeout(10000);
+        config.setMaxLifetime(0); // 本地檔案連線不需定期回收（預設 30 分鐘會無意義地重建唯一的連線）
+        config.setConnectionTimeout(2000); // 只有 1 條連線，借不到就快速失敗，避免長時間凍結主執行緒
         config.setConnectionTestQuery("SELECT 1");
         return config;
     }
@@ -189,78 +203,45 @@ public class DataBase {
     /*--------------------------------------------------
                      新增DataBase
      --------------------------------------------------*/
-    private static void createTable() {
+    private static boolean createTable() {
         String resource = type.getSchemaResource();
 
         try (InputStream inputStream = Main.getInst().getResource(resource)) {
             if (inputStream == null) {
-                Main.getInst().getLogger().severe("❌ 找不到建表 SQL 資源: " + resource);
-                return;
+                logger.severe("❌ 找不到建表 SQL 資源: " + resource);
+                return false;
             }
 
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-                String sql = reader.lines().collect(Collectors.joining("\n"));
-
-                try (Connection conn = dataSource.getConnection()) {
-                    for (String statement : splitStatements(sql)) {
-                        try (PreparedStatement pstmt = conn.prepareStatement(statement)) {
-                            pstmt.execute();
-                        }
+            String sql = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            try (Connection conn = dataSource.getConnection()) {
+                for (String statement : splitStatements(sql)) {
+                    try (PreparedStatement pstmt = conn.prepareStatement(statement)) {
+                        pstmt.execute();
                     }
                 }
             }
-            Main.getInst().getLogger().info("✅ 成功執行 " + resource);
+            logger.info("✅ 成功執行 " + resource);
+            return true;
         } catch (Exception e) {
-            Main.getInst().getLogger().severe("❌ 執行 " + resource + " 失敗: " + e.getMessage());
+            logger.severe("❌ 執行 " + resource + " 失敗: " + e.getMessage());
             e.printStackTrace();
+            return false;
         }
     }
-
-    private static final Pattern BLOCK_BEGIN = Pattern.compile("\\bBEGIN\\b");
-    private static final Pattern BLOCK_END = Pattern.compile("\\bEND\\b");
 
     /**
-     * 將 SQL 檔切成可逐句執行的語句，並略過 BEGIN ... END 區塊內的分號
-     * （SQLite trigger 的 body 帶分號，單純 split(";") 會把語句切爛）
-     * <p>
-     * 註解行（--）會被移除，因此 schema 中的 BEGIN / END 必須是真正的區塊關鍵字，
-     * 不可出現在字串常值或識別名裡。
-     *
-     * @param sql 整份 SQL 內容
-     * @return 去掉結尾分號的語句列表
+     * 將 SQL 檔切成可逐句執行的語句：去除整行註解後以分號切割。
+     * schema 檔中不可出現字面分號（字串常值內）或 BEGIN ... END 區塊。
      */
     private static List<String> splitStatements(String sql) {
-        List<String> statements = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        int blockDepth = 0;
+        String noComments = Arrays.stream(sql.split("\n"))
+                .filter(line -> !line.trim().startsWith("--"))
+                .collect(Collectors.joining("\n"));
 
-        for (String line : sql.split("\n")) {
-            String trimmed = line.trim();
-            if (trimmed.isEmpty() || trimmed.startsWith("--")) continue;
-
-            current.append(line).append('\n');
-
-            String upper = trimmed.toUpperCase(Locale.ROOT);
-            if (BLOCK_BEGIN.matcher(upper).find()) blockDepth++;
-            if (BLOCK_END.matcher(upper).find()) blockDepth = Math.max(0, blockDepth - 1);
-
-            if (blockDepth > 0 || !trimmed.endsWith(";")) continue;
-
-            addStatement(statements, current.toString());
-            current.setLength(0);
-        }
-
-        // 最後一句若沒有分號結尾仍要執行
-        addStatement(statements, current.toString());
-        return statements;
-    }
-
-    private static void addStatement(List<String> statements, String raw) {
-        String statement = raw.trim();
-        if (statement.endsWith(";")) {
-            statement = statement.substring(0, statement.length() - 1).trim();
-        }
-        if (!statement.isEmpty()) statements.add(statement);
+        return Arrays.stream(noComments.split(";"))
+                .map(String::trim)
+                .filter(statement -> !statement.isEmpty())
+                .toList();
     }
 
     /**
@@ -269,6 +250,7 @@ public class DataBase {
     public static void close() {
         if (dataSource != null) {
             dataSource.close();
+            dataSource = null;
             logger.info("Database connection closed.");
         }
     }

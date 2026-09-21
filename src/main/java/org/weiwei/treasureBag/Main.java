@@ -26,7 +26,14 @@ public final class Main extends JavaPlugin {
         configManager.loadConfig();
 
         Message.loadMessage();
-        DataBase.initialize();
+
+        // 資料庫失敗就停用插件：物品倉儲插件在沒有資料表的狀態下運作，
+        // 只會讓每次開背包報錯，甚至造成資料異常
+        if (!DataBase.initialize()) {
+            getLogger().severe("資料庫初始化失敗，停用插件（請檢查 DataBase.yml 與上方錯誤訊息）");
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
 
         MainCommand mainCommand = new MainCommand();
         mainCommand.setup(COMMAND);

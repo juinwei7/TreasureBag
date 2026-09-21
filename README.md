@@ -96,9 +96,9 @@ sqlite:
 
 選 `sqlite` 時不需要填 mysql 區塊，也不必另外安裝資料庫或 driver，插件會在 `plugins/TreasureBag/` 建立資料庫檔案。
 
-SQLite driver 已打包進 jar，僅保留 Mac ARM 與 Linux x86_64 / aarch64 的 native library。若要部署到 Windows 或 Alpine(musl) 伺服器，需調整 `pom.xml` 中 maven-shade-plugin 的 filter 後重新建置。
+升級舊版時若 `DataBase.yml` 沒有 `type` 欄位，會自動沿用 MySQL；`type` 填了無法辨識的值（例如打錯字）會直接啟動失敗並停用插件，不會靜默改用 MySQL。
 
-升級舊版時若 `DataBase.yml` 沒有 `type` 欄位，會自動沿用 MySQL。
+若伺服器的 `/tmp` 以 `noexec` 掛載（部分硬化環境），SQLite 原生函式庫會無法載入，啟動指令加上 `-Dorg.sqlite.tmpdir=<可執行的目錄>` 即可解決。
 
 兩種後端的資料互不相通，目前沒有提供互轉工具。
 

@@ -69,7 +69,7 @@ public class PlayerBagService {
             PlayerInfo playerInfo = REPOSITORY.getOrCreatePlayerInfo(player);
             List<PlayerBag> playerBags = REPOSITORY.loadPlayerBags(playerInfo);
             List<PlayerBag> allowedBags = new ArrayList<>();
-            int dropCount = 0;
+            List<ItemStack> overflowItems = new ArrayList<>();
             int overflowSlotCount = 0;
 
             for (PlayerBag playerBag : playerBags) {
@@ -79,8 +79,7 @@ public class PlayerBagService {
                     overflowSlotCount++;
                     ItemStack item = playerBag.getItem();
                     if (item != null && !item.getType().isAir()) {
-                        player.getWorld().dropItemNaturally(player.getLocation(), item.clone());
-                        dropCount++;
+                        overflowItems.add(item.clone());
                     }
                     continue;
                 }
@@ -91,8 +90,11 @@ public class PlayerBagService {
             }
 
             if (overflowSlotCount > 0) {
+                // 先刪 DB 再掉落：若刪除失敗會拋出例外，物品不掉出，
+                // 避免下次 force 時 DB 資料仍在而再掉一次（物品複製）
                 REPOSITORY.deletePlayerBagsFromSlot(playerInfo, maxSlot);
-                Message.sendPrefix(player, Message.MESSAGE__BAG_FORCE_DROPPED, dropCount);
+                overflowItems.forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+                Message.sendPrefix(player, Message.MESSAGE__BAG_FORCE_DROPPED, overflowItems.size());
             }
             open(player, playerInfo, maxSlot, allowedBags);
         } catch (Exception e) {

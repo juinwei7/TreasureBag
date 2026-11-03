@@ -432,13 +432,16 @@ public class PlayerBagService {
     }
 
     /**
-     * 整理：同種物品疊在一起，依物品種類、名稱、數量排好，從第一格開始放（讀不出來的格位原地不動）
+     * 整理目前這一頁：同種物品疊在一起，依物品種類、名稱、數量排好，從這頁第一格開始放
+     * 只動這一頁，其他頁的擺放是玩家自己分好的，不能被打亂；讀不出來的格位原地不動
      */
     private static void sort(Player player, CustomGui gui, BagSession session) {
         savePage(session, gui);
 
+        int start = gui.getPage() * PAGE_CONTENT_SIZE;
+        int end = Math.min(start + PAGE_CONTENT_SIZE, session.maxSlot());
         List<ItemStack> stacks = new ArrayList<>();
-        for (int slot = 0; slot < session.maxSlot(); slot++) {
+        for (int slot = start; slot < end; slot++) {
             ItemStack item = session.items().get(slot);
             if (item == null || item.getType().isAir()) continue;
             stack(stacks, item.clone());
@@ -447,8 +450,8 @@ public class PlayerBagService {
                 .thenComparing(ItemManage::nameOf)
                 .thenComparing(ItemStack::getAmount, Comparator.reverseOrder()));
 
-        session.items().keySet().removeIf(slot -> slot < session.maxSlot());
-        int slot = 0;
+        session.items().keySet().removeIf(slot -> slot >= start && slot < end);
+        int slot = start;
         for (ItemStack item : stacks) {
             while (session.brokenSlots().contains(slot)) slot++;
             session.items().put(slot++, item);

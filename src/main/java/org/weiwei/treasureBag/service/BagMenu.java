@@ -68,8 +68,8 @@ final class BagMenu {
         }
 
         if (canEdit) {
-            inventory.setItem(SORT_SLOT, ItemManage.createItem(Material.BRUSH, "§e整理背包",
-                    List.of("§7依種類排好，同種物品自動疊在一起"), CMD_BUTTON));
+            inventory.setItem(SORT_SLOT, ItemManage.createItem(Material.BRUSH, "§e整理這一頁",
+                    List.of("§7依種類排好，同種物品自動疊在一起", "§7其他頁不會動到"), CMD_BUTTON));
             inventory.setItem(DEPOSIT_SLOT, ItemManage.createItem(Material.HOPPER, "§e一鍵存入",
                     List.of("§7身上的物品（不含快捷列）", "§7只要背包裡已經有同種的，就全部存進來"), CMD_BUTTON));
         }

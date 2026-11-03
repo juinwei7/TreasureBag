@@ -30,6 +30,11 @@ MESSAGE:
   BAG_FORCE_DROPPED: '§e已將 §f{0} §e格超出背包空間的物品掉落到地板上'
   BAG_CONTAINER_FORBIDDEN: '§c界伏盒、收納袋等可攜式容器不能放入隨身背包'
   BAG_TARGET_IN_USE: '§c目標玩家目前正在使用背包，請等待對方關閉後再試'
+  BAG_OWNER_IN_USE: '§c管理員正在查看你的隨身背包，請稍後再開'
+  BAG_SAVE_PENDING: '§e隨身背包資料補存中，請稍後再開'
+  BAG_SAVE_FAILED: '§c隨身背包暫時無法存檔，物品已保留，系統會自動補存'
+  BAG_SAVE_RECOVERED: '§a隨身背包已補存完成'
+  BAG_READ_ONLY: '§e{0} 不在這個分流，以唯讀模式開啟（要修改請加 edit）'
   DB_TYPE_CHANGED: '§e偵測到 DataBase.yml 的 type 已改為 §f{0}§e，資料庫設定需重啟伺服器才會生效（目前仍使用 §f{1}§e）'
 
 # 時間格式
@@ -55,6 +60,13 @@ MENU_TITLE:
   ADMIN_MENU: '&1隨身背包: %player%'
   VIEW_MENU: '§r       §r§9◆§3◆§9◆     §1§l隨身背包     §9◆§3◆§9◆'
   BAG_MENU: '§1§l隨身背包 §7- 第 {0}/{1} 頁'
+
+# 選單物品
+MENU_ITEM:
+  BROKEN_NAME: '§c無法讀取的物品'
+  BROKEN_LORE:
+    - '§7這格的資料暫時讀不出來，已原封不動保留'
+    - '§7請截圖回報管理員'
 
 # 指令提示
 HELP:

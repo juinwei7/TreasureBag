@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 public class OpenCommand extends SubCommand {
 
     private static final String OPEN_OTHER_PERMISSION = "treasure-bag.admin";
+    private static final String EDIT_ARG = "edit";
 
     public OpenCommand() {
         super("open", Message.COMMAND__OPEN);
@@ -38,7 +39,9 @@ public class OpenCommand extends SubCommand {
             return;
         }
 
-        PlayerBagService.openOther(player, targetName);
+        // 對方不在這台時預設唯讀，加上 edit 才能修改
+        boolean edit = args.length >= 3 && args[2].equalsIgnoreCase(EDIT_ARG);
+        PlayerBagService.openOther(player, targetName, edit);
     }
 
     @Override
@@ -49,6 +52,9 @@ public class OpenCommand extends SubCommand {
                     .map(Player::getName)
                     .filter(name -> name.toLowerCase().startsWith(input))
                     .collect(Collectors.toList());
+        }
+        if (args.length == 2 && sender.hasPermission(OPEN_OTHER_PERMISSION) && EDIT_ARG.startsWith(args[1].toLowerCase())) {
+            return List.of(EDIT_ARG);
         }
         return List.of();
     }

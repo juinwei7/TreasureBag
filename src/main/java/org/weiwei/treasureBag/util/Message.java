@@ -8,6 +8,9 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.weiwei.treasureBag.Main;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.List;
@@ -50,6 +53,11 @@ public enum Message {
     MESSAGE__BAG_CONTAINER_FORBIDDEN,
     MESSAGE__BAG_TARGET_IN_USE,
     MESSAGE__DB_TYPE_CHANGED,
+    MESSAGE__BAG_OWNER_IN_USE,
+    MESSAGE__BAG_SAVE_PENDING,
+    MESSAGE__BAG_SAVE_FAILED,
+    MESSAGE__BAG_SAVE_RECOVERED,
+    MESSAGE__BAG_READ_ONLY,
 
     FORMAT__TIME_S,
     FORMAT__TIME_M,
@@ -67,6 +75,9 @@ public enum Message {
     MENU_TITLE__ADMIN_MENU,
     MENU_TITLE__VIEW_MENU,
     MENU_TITLE__BAG_MENU,
+
+    MENU_ITEM__BROKEN_NAME,
+    MENU_ITEM__BROKEN_LORE,
 
     HELP__FIRST_LINE,
     HELP__HOVER,
@@ -90,6 +101,11 @@ public enum Message {
             Main.getInst().saveResource("Message.yml", true);
         }
         messages = YamlConfiguration.loadConfiguration(file);
+        // 伺服器上的 Message.yml 只在不存在時才會寫出，新版加的訊息靠 jar 內建的預設值補上
+        InputStream defaults = Main.getInst().getResource("Message.yml");
+        if (defaults != null) {
+            messages.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(defaults, StandardCharsets.UTF_8)));
+        }
         tool.setConfig(messages);
     }
 
@@ -185,7 +201,9 @@ public enum Message {
          * @return 格式化後的字串
          */
         public String getString(String loc, Object... args) {
-            String message = config.getString(loc, "空消息: " + loc);
+            // 不帶預設值的 getString 才會讀 setDefaults 補上的內容
+            String message = config.getString(loc);
+            if (message == null) message = "空消息: " + loc;
             return translateHexCodes(MessageFormat.format(message, args)).replace("&", "§");
         }
 

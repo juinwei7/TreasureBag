@@ -44,6 +44,11 @@ public class MainCommand implements CommandExecutor, TabCompleter {
         new ForceCommand().registerCommand();
         new ReloadCommand().registerCommand();
 
+        // TradeCommand 直接引用 Minepacks API，沒裝 Minepacks 的分流一載入就 NoClassDefFoundError，整個外掛啟用失敗
+        if (Bukkit.getPluginManager().getPlugin("Minepacks") != null) registerTradeCommand();
+    }
+
+    private static void registerTradeCommand() {
         new TradeCommand().registerCommand();
     }
 

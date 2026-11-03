@@ -23,13 +23,26 @@ public class PlayerBagListener implements Listener {
         if (gui == null) return;
 
         int rawSlot = event.getRawSlot();
-        if (event.isShiftClick() && rawSlot >= event.getView().getTopInventory().getSize()) {
+        int topSize = event.getView().getTopInventory().getSize();
+        boolean readOnly = PlayerBagService.isReadOnly(player);
+        if (event.isShiftClick() && rawSlot >= topSize) {
             event.setCancelled(true);
-            moveShiftClickedItem(player, gui, event);
+            if (!readOnly) moveShiftClickedItem(player, gui, event);
             return;
         }
 
-        if (rawSlot < 0 || rawSlot >= event.getView().getTopInventory().getSize()) return;
+        if (rawSlot < 0 || rawSlot >= topSize) {
+            // 唯讀時連雙擊收集也擋，避免從背包裡把同種物品吸到游標上
+            if (readOnly && event.getClick() == ClickType.DOUBLE_CLICK) event.setCancelled(true);
+            return;
+        }
+
+        if (readOnly) {
+            event.setCancelled(true);
+            if (rawSlot == PlayerBagService.PREVIOUS_PAGE_SLOT) PlayerBagService.switchPage(player, gui, gui.getPage() - 1);
+            if (rawSlot == PlayerBagService.NEXT_PAGE_SLOT) PlayerBagService.switchPage(player, gui, gui.getPage() + 1);
+            return;
+        }
 
         if (isPuttingPortableContainer(event)) {
             event.setCancelled(true);
@@ -37,7 +50,7 @@ public class PlayerBagListener implements Listener {
             return;
         }
 
-        if (PlayerBagService.isControlSlot(rawSlot) || PlayerBagService.isLockedContentSlot(gui, rawSlot)) {
+        if (PlayerBagService.isControlSlot(rawSlot) || PlayerBagService.isLockedContentSlot(player, gui, rawSlot)) {
             event.setCancelled(true);
         }
 
@@ -58,11 +71,12 @@ public class PlayerBagListener implements Listener {
         CustomGui gui = CustomGui.isCustomGui(event.getView().getTopInventory(), GuiType.BAG_MENU);
         if (gui == null) return;
 
+        boolean readOnly = PlayerBagService.isReadOnly(player);
         boolean dragToBag = false;
         for (int rawSlot : event.getRawSlots()) {
             if (rawSlot >= event.getView().getTopInventory().getSize()) continue;
             dragToBag = true;
-            if (PlayerBagService.isControlSlot(rawSlot) || PlayerBagService.isLockedContentSlot(gui, rawSlot)) {
+            if (readOnly || PlayerBagService.isControlSlot(rawSlot) || PlayerBagService.isLockedContentSlot(player, gui, rawSlot)) {
                 event.setCancelled(true);
                 return;
             }

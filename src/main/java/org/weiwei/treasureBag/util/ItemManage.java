@@ -54,6 +54,24 @@ public class ItemManage {
         return createItem(Material.GRAY_STAINED_GLASS_PANE, " ", null, 0);
     }
 
+    /**
+     * 讀不出來的格位佔位物品（該格資料保留在資料庫，不能操作）
+     */
+    public static ItemStack getBrokenItem() {
+        return createItem(Material.BARRIER, Message.getMsg(Message.MENU_ITEM__BROKEN_NAME),
+                Message.getStringList(Message.MENU_ITEM__BROKEN_LORE), 0);
+    }
+
+    /**
+     * 物品名稱：有自訂名稱用自訂名稱，否則用物品種類
+     */
+    public static String nameOf(ItemStack item) {
+        if (item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
+            return item.getItemMeta().getDisplayName();
+        }
+        return item.getType().name();
+    }
+
 
 
 }

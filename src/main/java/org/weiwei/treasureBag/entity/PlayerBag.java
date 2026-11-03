@@ -3,6 +3,7 @@ package org.weiwei.treasureBag.entity;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.inventory.ItemStack;
+import org.weiwei.treasureBag.util.ItemManage;
 import org.weiwei.treasureBag.util.ItemSerialize;
 
 import java.util.UUID;
@@ -28,12 +29,8 @@ public class PlayerBag {
      * 設定序列化物品
      */
     public void setItem(ItemStack item) {
-        String name = item.getType().name();
-        if (item.hasItemMeta()) {
-            name = item.getItemMeta().getDisplayName();
-        }
         this.serialize = ItemSerialize.itemToBase64(item);
-        this.itemName = name;
+        this.itemName = ItemManage.nameOf(item);
     }
 
 

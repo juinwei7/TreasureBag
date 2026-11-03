@@ -149,7 +149,9 @@ public class DataBase {
         String password = dataBaseConfig.getString(path + "password");
 
         HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?useSSL=false&serverTimezone=Asia/Taipei");
+        // rewriteBatchedStatements：批次寫入合併成一句送出，不然每格一次往返
+        config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database
+                + "?useSSL=false&serverTimezone=Asia/Taipei&rewriteBatchedStatements=true");
         config.setUsername(user);
         config.setPassword(password);
         config.setPoolName(database);
@@ -242,6 +244,13 @@ public class DataBase {
                 .map(String::trim)
                 .filter(statement -> !statement.isEmpty())
                 .toList();
+    }
+
+    /**
+     * 連線池是否已初始化（啟動失敗時為 false）
+     */
+    public static boolean isReady() {
+        return dataSource != null;
     }
 
     /**

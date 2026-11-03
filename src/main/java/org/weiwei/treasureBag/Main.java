@@ -6,6 +6,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.weiwei.treasureBag.command.MainCommand;
 import org.weiwei.treasureBag.dataBase.DataBase;
 import org.weiwei.treasureBag.listener.PlayerBagListener;
+import org.weiwei.treasureBag.service.BagStorage;
+import org.weiwei.treasureBag.service.PlayerBagService;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.Message;
 
@@ -35,6 +37,9 @@ public final class Main extends JavaPlugin {
             return;
         }
 
+        // IO 執行緒啟動時會先補寫上次停用沒存進去的背包（plugins/TreasureBag/unsaved）
+        BagStorage.start();
+
         MainCommand mainCommand = new MainCommand();
         mainCommand.setup(COMMAND);
 
@@ -44,6 +49,8 @@ public final class Main extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // 先存還開著的背包與排隊中的存檔，再關連線池
+        if (DataBase.isReady()) PlayerBagService.shutdown();
         DataBase.close();
     }
 }

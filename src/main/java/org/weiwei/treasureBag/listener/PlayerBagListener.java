@@ -37,10 +37,16 @@ public class PlayerBagListener implements Listener {
             return;
         }
 
+        // 控制列（整理、一鍵存入、頁籤、資訊）：一律取消，交給 service 判斷按了什麼
+        if (PlayerBagService.isControlSlot(rawSlot)) {
+            event.setCancelled(true);
+            // 只認滑鼠點擊，數字鍵、丟棄鍵按到控制列不觸發按鈕
+            if (event.getClick().isMouseClick()) PlayerBagService.clickControl(player, gui, rawSlot, event.isRightClick());
+            return;
+        }
+
         if (readOnly) {
             event.setCancelled(true);
-            if (rawSlot == PlayerBagService.PREVIOUS_PAGE_SLOT) PlayerBagService.switchPage(player, gui, gui.getPage() - 1);
-            if (rawSlot == PlayerBagService.NEXT_PAGE_SLOT) PlayerBagService.switchPage(player, gui, gui.getPage() + 1);
             return;
         }
 
@@ -50,17 +56,8 @@ public class PlayerBagListener implements Listener {
             return;
         }
 
-        if (PlayerBagService.isControlSlot(rawSlot) || PlayerBagService.isLockedContentSlot(player, gui, rawSlot)) {
+        if (PlayerBagService.isLockedContentSlot(player, gui, rawSlot)) {
             event.setCancelled(true);
-        }
-
-        if (rawSlot == PlayerBagService.PREVIOUS_PAGE_SLOT) {
-            PlayerBagService.switchPage(player, gui, gui.getPage() - 1);
-            return;
-        }
-
-        if (rawSlot == PlayerBagService.NEXT_PAGE_SLOT) {
-            PlayerBagService.switchPage(player, gui, gui.getPage() + 1);
         }
     }
 

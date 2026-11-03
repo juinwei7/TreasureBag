@@ -5,18 +5,24 @@ import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
+import org.bukkit.Sound;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.PlayerInventory;
+import org.weiwei.treasureBag.Main;
 import org.weiwei.treasureBag.customGui.CustomGui;
 import org.weiwei.treasureBag.customGui.GuiType;
 import org.weiwei.treasureBag.data.BagChanges;
+import org.weiwei.treasureBag.data.BagLog;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.ItemManage;
 import org.weiwei.treasureBag.util.Message;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -28,7 +34,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletionException;
 
 /**
- * 背包的開啟、翻頁、關閉流程（主執行緒）
+ * 背包的開啟、翻頁、關閉流程與介面上的功能（主執行緒）
  * <p>
  * 資料庫讀寫都交給 {@link BagStorage} 在 IO 執行緒跑：開背包時先排隊讀取，讀完回主執行緒建立 session；
  * 關背包時交出 snapshot，比對與寫入在背景完成。
@@ -38,13 +44,16 @@ import java.util.concurrent.CompletionException;
  */
 public class PlayerBagService {
 
-    public static final int PAGE_CONTENT_SIZE = 45;
-    public static final int PREVIOUS_PAGE_SLOT = 48;
-    public static final int INFO_SLOT = 49;
-    public static final int NEXT_PAGE_SLOT = 50;
+    public static final int PAGE_CONTENT_SIZE = BagMenu.PAGE_CONTENT_SIZE;
 
     /** 依現有資料推算格數（管理員查看不在這台的玩家） */
     private static final int INFER_MAX_SLOT = -1;
+    /** 整理、一鍵存入的冷卻（毫秒） */
+    private static final long ACTION_COOLDOWN_MS = 1000;
+    /** 頁面名稱最多幾個字 */
+    public static final int PAGE_NAME_MAX_LENGTH = 8;
+    private static final int LOG_PAGE_SIZE = 10;
+    private static final DateTimeFormatter LOG_TIME = DateTimeFormatter.ofPattern("MM/dd HH:mm").withZone(ZoneId.systemDefault());
 
     /** 觀看者 → 開著的背包 */
     private static final Map<UUID, BagSession> SESSIONS = new HashMap<>();
@@ -53,6 +62,8 @@ public class PlayerBagService {
     /** 正在讀取背包的觀看者（重複開啟直接忽略） */
     private static final Set<UUID> LOADING = new HashSet<>();
     private static final Set<UUID> PAGE_SWITCHING = new HashSet<>();
+    /** 觀看者上次整理／一鍵存入的時間 */
+    private static final Map<UUID, Long> LAST_ACTION = new HashMap<>();
 
     private enum Mode {
         /** 一般開啟：有溢出物品就先警告 */
@@ -67,14 +78,18 @@ public class PlayerBagService {
      * 開啟背包
      */
     public static void open(Player player) {
-        request(player, player.getUniqueId(), player.getName(), getMaxSlot(player), Mode.NORMAL, false);
+        open(player, 0);
+    }
+
+    private static void open(Player player, int startPage) {
+        request(player, player.getUniqueId(), player.getName(), getMaxSlot(player), Mode.NORMAL, false, startPage);
     }
 
     /**
      * 強制開啟背包：將超出權限格數的物品掉落到地上，再開啟背包
      */
     public static void forceOpen(Player player) {
-        request(player, player.getUniqueId(), player.getName(), getMaxSlot(player), Mode.FORCE, false);
+        request(player, player.getUniqueId(), player.getName(), getMaxSlot(player), Mode.FORCE, false, 0);
     }
 
     /**
@@ -92,7 +107,7 @@ public class PlayerBagService {
             return;
         }
         if (target != null) {
-            request(viewer, target.getUniqueId(), target.getName(), getMaxSlot(target), Mode.ADMIN, false);
+            request(viewer, target.getUniqueId(), target.getName(), getMaxSlot(target), Mode.ADMIN, false, 0);
             return;
         }
 
@@ -113,20 +128,21 @@ public class PlayerBagService {
             // 查詢期間對方剛好進到這台
             Player targetNow = Bukkit.getPlayer(playerInfo.getPlayerUUID());
             if (targetNow != null) {
-                request(viewerNow, targetNow.getUniqueId(), targetNow.getName(), getMaxSlot(targetNow), Mode.ADMIN, false);
+                request(viewerNow, targetNow.getUniqueId(), targetNow.getName(), getMaxSlot(targetNow), Mode.ADMIN, false, 0);
                 return;
             }
 
             // 對方可能在其他分流開著背包，這邊改了會互相覆蓋，預設只給看
             if (!edit) Message.sendPrefix(viewerNow, Message.MESSAGE__BAG_READ_ONLY, playerInfo.getPlayerName());
-            request(viewerNow, playerInfo.getPlayerUUID(), playerInfo.getPlayerName(), INFER_MAX_SLOT, Mode.ADMIN, !edit);
+            request(viewerNow, playerInfo.getPlayerUUID(), playerInfo.getPlayerName(), INFER_MAX_SLOT, Mode.ADMIN, !edit, 0);
         }));
     }
 
     /**
      * 開背包的共同入口：檢查鎖、排隊讀取，讀完回主執行緒處理
      */
-    private static void request(Player viewer, UUID owner, String ownerName, int maxSlot, Mode mode, boolean readOnly) {
+    private static void request(Player viewer, UUID owner, String ownerName, int maxSlot, Mode mode,
+                                boolean readOnly, int startPage) {
         UUID viewerId = viewer.getUniqueId();
         if (LOADING.contains(viewerId)) return;
 
@@ -155,11 +171,12 @@ public class PlayerBagService {
                 if (viewerNow != null) sendLoadError(viewerNow, ownerName, error);
                 return;
             }
-            onLoaded(viewerNow, bag, maxSlot, mode, readOnly);
+            onLoaded(viewerNow, bag, maxSlot, mode, readOnly, startPage);
         }));
     }
 
-    private static void onLoaded(Player viewer, BagStorage.LoadedBag bag, int requestedMaxSlot, Mode mode, boolean readOnly) {
+    private static void onLoaded(Player viewer, BagStorage.LoadedBag bag, int requestedMaxSlot, Mode mode,
+                                 boolean readOnly, int startPage) {
         UUID viewerId = viewer.getUniqueId();
         UUID owner = bag.playerInfo().getPlayerUUID();
         int maxSlot = requestedMaxSlot == INFER_MAX_SLOT ? inferMaxSlot(bag) : requestedMaxSlot;
@@ -170,7 +187,7 @@ public class PlayerBagService {
         });
 
         if (overflow.isEmpty() || mode == Mode.ADMIN) {
-            startSession(viewer, bag, maxSlot, readOnly);
+            startSession(viewer, bag, maxSlot, readOnly, startPage);
             return;
         }
 
@@ -180,8 +197,14 @@ public class PlayerBagService {
             return;
         }
 
-        // 強制開啟：先刪資料庫再掉落；刪除失敗就不掉，避免下次再掉一次（複製）
-        BagStorage.deleteSlots(owner, overflow.keySet()).whenComplete((ignored, error) -> BagStorage.runSync(() -> {
+        // 強制開啟：先刪資料庫再掉落；刪除失敗就不掉，避免下次再掉一次（複製）。刪除與存取紀錄同一筆交易
+        BagChanges drop = new BagChanges(owner, bag.playerInfo().getPlayerName())
+                .by(viewerId, viewer.getName(), BagChanges.SOURCE_FORCE);
+        overflow.forEach((slot, item) -> {
+            drop.put(new BagChanges.SlotChange(slot, bag.baseline().get(slot), null, null));
+            drop.addLog(new BagChanges.LogEntry(item.getType().name(), ItemManage.nameOf(item), -item.getAmount()));
+        });
+        BagStorage.apply(drop).whenComplete((ignored, error) -> BagStorage.runSync(() -> {
             Player viewerNow = Bukkit.getPlayer(viewerId);
             if (error != null) {
                 OWNERS.remove(owner, viewerId);
@@ -203,11 +226,11 @@ public class PlayerBagService {
                 bag.baselineItems().remove(slot);
             });
             Message.sendPrefix(viewerNow, Message.MESSAGE__BAG_FORCE_DROPPED, overflow.size());
-            startSession(viewerNow, bag, maxSlot, false);
+            startSession(viewerNow, bag, maxSlot, false, startPage);
         }));
     }
 
-    private static void startSession(Player viewer, BagStorage.LoadedBag bag, int maxSlot, boolean readOnly) {
+    private static void startSession(Player viewer, BagStorage.LoadedBag bag, int maxSlot, boolean readOnly, int startPage) {
         Map<Integer, ItemStack> items = new HashMap<>();
         bag.items().forEach((slot, item) -> {
             if (slot < maxSlot) items.put(slot, item);
@@ -218,8 +241,8 @@ public class PlayerBagService {
         });
 
         SESSIONS.put(viewer.getUniqueId(), new BagSession(bag.playerInfo(), maxSlot, items, bag.baseline(),
-                bag.baselineItems(), broken, readOnly));
-        openPage(viewer, 0);
+                bag.baselineItems(), broken, bag.pageNames(), readOnly));
+        openPage(viewer, startPage);
     }
 
     private static void restoreRows(BagStorage.LoadedBag bag, Set<Integer> slots) {
@@ -252,18 +275,19 @@ public class PlayerBagService {
         BagSession session = getSession(player);
         if (session == null) return;
 
-        int maxPage = getMaxPage(session.maxSlot());
+        int maxPage = BagMenu.maxPage(session.maxSlot());
         int fixedPage = Math.max(0, Math.min(page, maxPage - 1));
         session.setPage(fixedPage);
 
-        String title = Message.getMsg(Message.MENU_TITLE__BAG_MENU, fixedPage + 1, maxPage);
-        CustomGui gui = new CustomGui(GuiType.BAG_MENU, player, title);
+        boolean isOwner = player.getUniqueId().equals(session.ownerUuid());
+        CustomGui gui = new CustomGui(GuiType.BAG_MENU, player,
+                BagMenu.title(player, session, session.owner().getPlayerName(), isOwner));
         gui.setPage(fixedPage);
         gui.setMaxSlot(session.maxSlot());
 
         Inventory inventory = gui.getInventory();
-        fillContent(inventory, session);
-        fillControlRow(inventory, fixedPage, maxPage, session.maxSlot());
+        BagMenu.fillContent(inventory, session);
+        BagMenu.fillControlRow(inventory, session, !session.readOnly(), isOwner);
         player.openInventory(inventory);
     }
 
@@ -288,7 +312,32 @@ public class PlayerBagService {
     }
 
     /**
-     * 判斷該 rawSlot 是否為底部控制列（上一頁 / 資訊 / 下一頁）
+     * 處理底部控制列的點擊（listener 已先取消事件）
+     *
+     * @param rightClick 是否為右鍵
+     */
+    public static void clickControl(Player player, CustomGui gui, int rawSlot, boolean rightClick) {
+        BagSession session = getSession(player);
+        if (session == null) return;
+
+        int tabPage = BagMenu.tabPage(session, rawSlot);
+        if (tabPage >= 0) {
+            boolean canRename = !session.readOnly() && player.getUniqueId().equals(session.ownerUuid());
+            if (rightClick && canRename) {
+                promptRename(player, tabPage);
+                return;
+            }
+            if (tabPage != gui.getPage()) switchPage(player, gui, tabPage);
+            return;
+        }
+
+        if (session.readOnly()) return;
+        if (rawSlot == BagMenu.SORT_SLOT && checkCooldown(player)) sort(player, gui, session);
+        if (rawSlot == BagMenu.DEPOSIT_SLOT && checkCooldown(player)) deposit(player, gui, session);
+    }
+
+    /**
+     * 判斷該 rawSlot 是否為底部控制列
      *
      * @param rawSlot 點擊的原始格位
      * @return true 表示屬於控制列
@@ -332,12 +381,27 @@ public class PlayerBagService {
                 || typeName.endsWith("_BUNDLE");
     }
 
+    /**
+     * shift 點身上的物品：先疊到背包裡同種的堆，再放空格
+     *
+     * @return 實際移入的數量
+     */
     public static int moveItemToBag(Player player, CustomGui gui, ItemStack source) {
         BagSession session = getSession(player);
         if (session == null || session.readOnly() || gui == null || source == null || source.getType().isAir()) return 0;
 
         savePage(session, gui);
+        int moved = insert(session, source);
+        BagMenu.fillContent(gui.getInventory(), session);
+        return moved;
+    }
 
+    /**
+     * 把物品放進 session：先疊到同種的堆，再放空格（跳過讀不出來的格位）
+     *
+     * @return 實際放入的數量（source 本身不會被改動）
+     */
+    private static int insert(BagSession session, ItemStack source) {
         int originalAmount = source.getAmount();
         ItemStack moving = source.clone();
 
@@ -345,8 +409,7 @@ public class PlayerBagService {
             ItemStack existing = session.items().get(slot);
             if (existing == null || existing.getType().isAir() || !existing.isSimilar(moving)) continue;
 
-            int maxStackSize = existing.getMaxStackSize();
-            int moveAmount = Math.min(maxStackSize - existing.getAmount(), moving.getAmount());
+            int moveAmount = Math.min(existing.getMaxStackSize() - existing.getAmount(), moving.getAmount());
             if (moveAmount <= 0) continue;
 
             existing.setAmount(existing.getAmount() + moveAmount);
@@ -365,8 +428,212 @@ public class PlayerBagService {
             moving.setAmount(moving.getAmount() - moveAmount);
         }
 
-        fillContent(gui.getInventory(), session);
         return originalAmount - moving.getAmount();
+    }
+
+    /**
+     * 整理：同種物品疊在一起，依物品種類、名稱、數量排好，從第一格開始放（讀不出來的格位原地不動）
+     */
+    private static void sort(Player player, CustomGui gui, BagSession session) {
+        savePage(session, gui);
+
+        List<ItemStack> stacks = new ArrayList<>();
+        for (int slot = 0; slot < session.maxSlot(); slot++) {
+            ItemStack item = session.items().get(slot);
+            if (item == null || item.getType().isAir()) continue;
+            stack(stacks, item.clone());
+        }
+        stacks.sort(Comparator.<ItemStack>comparingInt(item -> item.getType().ordinal())
+                .thenComparing(ItemManage::nameOf)
+                .thenComparing(ItemStack::getAmount, Comparator.reverseOrder()));
+
+        session.items().keySet().removeIf(slot -> slot < session.maxSlot());
+        int slot = 0;
+        for (ItemStack item : stacks) {
+            while (session.brokenSlots().contains(slot)) slot++;
+            session.items().put(slot++, item);
+        }
+
+        BagMenu.fillContent(gui.getInventory(), session);
+        BagMenu.fillControlRow(gui.getInventory(), session, true, player.getUniqueId().equals(session.ownerUuid()));
+        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.2f);
+    }
+
+    /**
+     * 疊進已有的同種堆，疊不下的另起一堆
+     */
+    private static void stack(List<ItemStack> stacks, ItemStack item) {
+        for (ItemStack existing : stacks) {
+            if (item.getAmount() <= 0) return;
+            if (!existing.isSimilar(item)) continue;
+            int space = existing.getMaxStackSize() - existing.getAmount();
+            if (space <= 0) continue;
+            int move = Math.min(space, item.getAmount());
+            existing.setAmount(existing.getAmount() + move);
+            item.setAmount(item.getAmount() - move);
+        }
+        if (item.getAmount() > 0) stacks.add(item);
+    }
+
+    /**
+     * 一鍵存入：身上（第 10～36 格，不含快捷列、裝備、副手）只要背包裡已有同種的，就全部存進去
+     */
+    private static void deposit(Player player, CustomGui gui, BagSession session) {
+        savePage(session, gui);
+
+        List<ItemStack> kinds = new ArrayList<>(session.items().values());
+        PlayerInventory inventory = player.getInventory();
+        int moved = 0;
+        boolean matched = false;
+        for (int slot = 9; slot < 36; slot++) {
+            ItemStack item = inventory.getItem(slot);
+            if (item == null || item.getType().isAir() || isPortableContainer(item)) continue;
+            if (kinds.stream().noneMatch(kind -> kind.isSimilar(item))) continue;
+
+            matched = true;
+            int amount = insert(session, item);
+            if (amount <= 0) continue;
+            moved += amount;
+            if (amount >= item.getAmount()) {
+                inventory.setItem(slot, null);
+            } else {
+                item.setAmount(item.getAmount() - amount);
+                inventory.setItem(slot, item);
+            }
+        }
+
+        BagMenu.fillContent(gui.getInventory(), session);
+        BagMenu.fillControlRow(gui.getInventory(), session, true, player.getUniqueId().equals(session.ownerUuid()));
+        if (moved > 0) {
+            player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.0f);
+            Message.sendPrefix(player, Message.MESSAGE__BAG_DEPOSITED, moved);
+        } else {
+            Message.sendPrefix(player, matched ? Message.MESSAGE__BAG_FULL : Message.MESSAGE__BAG_DEPOSIT_NONE);
+        }
+    }
+
+    private static boolean checkCooldown(Player player) {
+        long now = System.currentTimeMillis();
+        Long last = LAST_ACTION.get(player.getUniqueId());
+        if (last != null && now - last < ACTION_COOLDOWN_MS) return false;
+        LAST_ACTION.put(player.getUniqueId(), now);
+        return true;
+    }
+
+    /**
+     * 右鍵頁籤：關掉背包，在聊天框帶出 /bag name 指令讓玩家輸入名稱
+     * 不攔截聊天訊息，避免名稱被聊天外掛廣播出去
+     */
+    private static void promptRename(Player player, int page) {
+        // 不在 InventoryClickEvent 裡直接關畫面，排到下一個 tick
+        Bukkit.getScheduler().runTask(Main.getInst(), () -> {
+            finishSession(player);
+            String command = "/bag name " + (page + 1) + " ";
+            player.sendMessage(Component.text(Message.getMsg(Message.MESSAGE__PREFIX))
+                    .append(Component.text(Message.getMsg(Message.MESSAGE__BAG_RENAME_HINT, page + 1, PAGE_NAME_MAX_LENGTH))
+                            .clickEvent(ClickEvent.suggestCommand(command))
+                            .hoverEvent(HoverEvent.showText(Component.text(command)))));
+        });
+    }
+
+    /**
+     * 幫自己的背包頁面取名字；name 為 null 或空白表示清除。完成後打開那一頁
+     *
+     * @param page 頁碼（1 起算，玩家看到的數字）
+     */
+    public static void renamePage(Player player, int page, String name) {
+        int maxPage = getMaxPage(player);
+        if (page < 1 || page > maxPage) {
+            Message.sendPrefix(player, Message.MESSAGE__BAG_INVALID_PAGE, maxPage);
+            return;
+        }
+
+        String cleaned = name == null ? "" : name.replaceAll("[§&][0-9a-fk-orA-FK-ORxX#]", "").trim();
+        if (cleaned.codePointCount(0, cleaned.length()) > PAGE_NAME_MAX_LENGTH) {
+            Message.sendPrefix(player, Message.MESSAGE__BAG_RENAME_TOO_LONG, PAGE_NAME_MAX_LENGTH);
+            return;
+        }
+        String saved = cleaned.isEmpty() ? null : cleaned;
+
+        UUID playerId = player.getUniqueId();
+        BagStorage.savePageName(playerId, page - 1, saved).whenComplete((ignored, error) -> BagStorage.runSync(() -> {
+            Player playerNow = Bukkit.getPlayer(playerId);
+            if (playerNow == null) return;
+            if (error != null) {
+                BagStorage.logSevere("無法保存背包頁面名稱: " + playerNow.getName(), error);
+                Message.sendPrefix(playerNow, Message.MESSAGE__ERROR, "無法保存頁面名稱");
+                return;
+            }
+            if (saved == null) {
+                Message.sendPrefix(playerNow, Message.MESSAGE__BAG_RENAME_CLEARED, page);
+            } else {
+                Message.sendPrefix(playerNow, Message.MESSAGE__BAG_RENAMED, page, saved);
+            }
+            open(playerNow, page - 1);
+        }));
+    }
+
+    /**
+     * 顯示某位玩家的背包存取紀錄（玩家或主控台都能用）
+     *
+     * @param page 頁碼（1 起算）
+     */
+    public static void showLogs(CommandSender sender, String targetName, int page) {
+        Player online = Bukkit.getPlayerExact(targetName);
+        if (online != null) {
+            showLogs(sender, online.getUniqueId(), online.getName(), page);
+            return;
+        }
+        BagStorage.findByName(targetName).whenComplete((playerInfo, error) -> BagStorage.runSync(() -> {
+            if (error != null) {
+                BagStorage.logSevere("無法查詢玩家背包資料: " + targetName, error);
+                Message.sendPrefix(sender, Message.MESSAGE__ERROR, "無法讀取紀錄");
+                return;
+            }
+            if (playerInfo == null) {
+                Message.sendPrefix(sender, Message.MESSAGE__NO_PLAYER);
+                return;
+            }
+            showLogs(sender, playerInfo.getPlayerUUID(), playerInfo.getPlayerName(), page);
+        }));
+    }
+
+    private static void showLogs(CommandSender sender, UUID owner, String ownerName, int page) {
+        int fixedPage = Math.max(1, page);
+        BagStorage.loadLogs(owner, (fixedPage - 1) * LOG_PAGE_SIZE, LOG_PAGE_SIZE)
+                .whenComplete((logs, error) -> BagStorage.runSync(() -> {
+                    if (error != null) {
+                        BagStorage.logSevere("無法讀取背包存取紀錄: " + ownerName, error);
+                        Message.sendPrefix(sender, Message.MESSAGE__ERROR, "無法讀取紀錄");
+                        return;
+                    }
+
+                    Message.sendPrefix(sender, Message.MESSAGE__BAG_LOG_HEADER, ownerName, fixedPage);
+                    if (logs.isEmpty()) {
+                        Message.send(sender, Message.MESSAGE__BAG_LOG_EMPTY);
+                        return;
+                    }
+                    for (BagLog log : logs) sender.sendMessage(formatLog(log, owner));
+                    if (logs.size() == LOG_PAGE_SIZE) {
+                        String next = "/bag log " + ownerName + " " + (fixedPage + 1);
+                        sender.sendMessage(Component.text(Message.getMsg(Message.MESSAGE__BAG_LOG_NEXT))
+                                .clickEvent(ClickEvent.runCommand(next))
+                                .hoverEvent(HoverEvent.showText(Component.text(next))));
+                    }
+                }));
+    }
+
+    private static String formatLog(BagLog log, UUID owner) {
+        StringBuilder line = new StringBuilder("§7")
+                .append(LOG_TIME.format(Instant.ofEpochMilli(log.createdAt())))
+                .append(" §8").append(log.server() != null ? log.server() : "?")
+                .append(log.amount() > 0 ? " §a+" : " §c").append(log.amount())
+                .append(" §f").append(log.itemName() != null ? log.itemName() : log.material());
+        if (log.viewer() != null && !log.viewer().equals(owner)) {
+            line.append(" §8（").append(log.viewerName()).append(" 操作）");
+        }
+        if (BagChanges.SOURCE_FORCE.equals(log.source())) line.append(" §8（強制開啟掉落）");
+        return line.toString();
     }
 
     /**
@@ -412,7 +679,7 @@ public class PlayerBagService {
         savePage(session, gui);
         if (PAGE_SWITCHING.remove(player.getUniqueId())) return;
 
-        endSession(player.getUniqueId(), session);
+        endSession(player, session);
     }
 
     /**
@@ -425,15 +692,17 @@ public class PlayerBagService {
         CustomGui gui = CustomGui.isCustomGui(viewer.getOpenInventory().getTopInventory(), GuiType.BAG_MENU);
         if (gui != null) savePage(session, gui);
         PAGE_SWITCHING.remove(viewer.getUniqueId());
-        endSession(viewer.getUniqueId(), session);
+        endSession(viewer, session);
         // session 已移除，觸發的 InventoryCloseEvent 會直接 return，不會再存一次
         viewer.closeInventory();
     }
 
-    private static void endSession(UUID viewerId, BagSession session) {
+    private static void endSession(Player viewer, BagSession session) {
+        UUID viewerId = viewer.getUniqueId();
         SESSIONS.remove(viewerId);
         OWNERS.remove(session.ownerUuid(), viewerId);
-        if (!session.readOnly()) BagStorage.save(session.snapshot(), viewerId);
+        LAST_ACTION.remove(viewerId);
+        if (!session.readOnly()) BagStorage.save(session.snapshot(viewerId, viewer.getName()), viewerId);
     }
 
     /**
@@ -453,12 +722,15 @@ public class PlayerBagService {
                 if (gui != null) savePage(session, gui);
                 viewers.add(viewer);
             }
-            if (!session.readOnly()) snapshots.add(session.snapshot());
+            if (!session.readOnly()) {
+                snapshots.add(session.snapshot(entry.getKey(), viewer != null ? viewer.getName() : null));
+            }
         }
         SESSIONS.clear();
         OWNERS.clear();
         LOADING.clear();
         PAGE_SWITCHING.clear();
+        LAST_ACTION.clear();
         viewers.forEach(Player::closeInventory);
         BagStorage.shutdown(snapshots);
     }
@@ -470,7 +742,7 @@ public class PlayerBagService {
      * @return 最大頁數（至少 1）
      */
     public static int getMaxPage(Player player) {
-        return getMaxPage(getMaxSlot(player));
+        return BagMenu.maxPage(getMaxSlot(player));
     }
 
     /**
@@ -488,79 +760,6 @@ public class PlayerBagService {
      */
     public static boolean hasSession(UUID uuid) {
         return SESSIONS.containsKey(uuid);
-    }
-
-    /**
-     * 將 Session 中的物品填入 GUI 的內容區（前 45 格）
-     * 超出可用格數的格位填入預設佔位物品，讀不出來的格位填入損壞提示
-     */
-    private static void fillContent(Inventory inventory, BagSession session) {
-        int pageOffset = session.page() * PAGE_CONTENT_SIZE;
-        for (int slot = 0; slot < PAGE_CONTENT_SIZE; slot++) {
-            int globalSlot = pageOffset + slot;
-            if (globalSlot >= session.maxSlot()) {
-                inventory.setItem(slot, ItemManage.getDefaultItem());
-                continue;
-            }
-            if (session.brokenSlots().contains(globalSlot)) {
-                inventory.setItem(slot, ItemManage.getBrokenItem());
-                continue;
-            }
-            ItemStack item = session.items().get(globalSlot);
-            inventory.setItem(slot, item == null ? null : item.clone());
-        }
-    }
-
-    /**
-     * 填入底部控制列：背景、上一頁箭頭、資訊書、下一頁箭頭
-     *
-     * @param inventory 目標物品欄
-     * @param page      當前頁碼（0-based）
-     * @param maxPage   最大頁數
-     * @param maxSlot   可用格數上限
-     */
-    private static void fillControlRow(Inventory inventory, int page, int maxPage, int maxSlot) {
-        for (int slot = PAGE_CONTENT_SIZE; slot < inventory.getSize(); slot++) {
-            inventory.setItem(slot, ItemManage.getDefaultItem());
-        }
-
-        inventory.setItem(PREVIOUS_PAGE_SLOT, createControlItem(Material.ARROW, "§e上一頁"));
-        inventory.setItem(INFO_SLOT, createInfoItem(page, maxPage, maxSlot));
-        inventory.setItem(NEXT_PAGE_SLOT, createControlItem(Material.ARROW, "§e下一頁"));
-    }
-
-    /**
-     * 建立底部資訊格（Book）：顯示頁碼與可用格數
-     */
-    private static ItemStack createInfoItem(int page, int maxPage, int maxSlot) {
-        List<String> lore = List.of(
-                "§7目前頁數: §f" + (page + 1) + "§7/§f" + maxPage,
-                "§7可使用格數: §f" + maxSlot
-        );
-        return ItemManage.createItem(Material.BOOK, "§b背包資訊", lore, 0);
-    }
-
-    /**
-     * 建立控制按鈕（箭頭）並設定顯示名稱
-     */
-    private static ItemStack createControlItem(Material material, String name) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(name);
-            item.setItemMeta(meta);
-        }
-        return item;
-    }
-
-    /**
-     * 依 maxSlot 計算最大頁數（至少 1 頁）
-     *
-     * @param maxSlot 可用格數上限
-     * @return 最大頁數
-     */
-    private static int getMaxPage(int maxSlot) {
-        return Math.max(1, (int) Math.ceil(maxSlot / (double) PAGE_CONTENT_SIZE));
     }
 
     /**

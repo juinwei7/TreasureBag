@@ -13,6 +13,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.weiwei.treasureBag.Main;
 import org.weiwei.treasureBag.command.sub.ForceCommand;
+import org.weiwei.treasureBag.command.sub.LogCommand;
+import org.weiwei.treasureBag.command.sub.NameCommand;
 import org.weiwei.treasureBag.command.sub.OpenCommand;
 import org.weiwei.treasureBag.command.sub.ReloadCommand;
 import org.weiwei.treasureBag.command.sub.TradeCommand;
@@ -42,6 +44,8 @@ public class MainCommand implements CommandExecutor, TabCompleter {
 
         new OpenCommand().registerCommand();
         new ForceCommand().registerCommand();
+        new NameCommand().registerCommand();
+        new LogCommand().registerCommand();
         new ReloadCommand().registerCommand();
 
         // TradeCommand 直接引用 Minepacks API，沒裝 Minepacks 的分流一載入就 NoClassDefFoundError，整個外掛啟用失敗
@@ -143,6 +147,7 @@ public class MainCommand implements CommandExecutor, TabCompleter {
         Message.send(player, Message.HELP__FIRST_LINE); // 顯示第一行提示
         SubCommand.getSubCommandMap().values().stream()
                 .filter(sub -> sub.isUse(getType(sender)))
+                .filter(sub -> sub.canUsePermission(sender))
                 .forEach(sub -> {
                     TextComponent line = Component.text("§b/" + sub.cmd + " " + sub.arg)
                             .hoverEvent(HoverEvent.showText(Component.text(Message.getMsg(Message.HELP__HOVER))))

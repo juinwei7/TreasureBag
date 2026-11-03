@@ -23,6 +23,32 @@ CREATE TABLE IF NOT EXISTS `player_info`
     last_update_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- player_bag_page：與 MySQL 版相同
+CREATE TABLE IF NOT EXISTS `player_bag_page`
+(
+    player_uuid    VARCHAR(64) NOT NULL,
+    page           INT         NOT NULL,
+    name           VARCHAR(64) NOT NULL,
+    PRIMARY KEY (player_uuid, page)
+);
+
+-- player_bag_log：AUTOINCREMENT 只能用 INTEGER PRIMARY KEY；SQLite 不支援在 CREATE TABLE 裡寫 INDEX，另外建
+CREATE TABLE IF NOT EXISTS `player_bag_log`
+(
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_uuid    VARCHAR(64) NOT NULL,
+    viewer_uuid    VARCHAR(64),
+    viewer_name    VARCHAR(64),
+    server         VARCHAR(64),
+    source         VARCHAR(16) NOT NULL,
+    material       VARCHAR(64) NOT NULL,
+    item_name      TEXT,
+    amount         INT         NOT NULL,
+    created_at     BIGINT      NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bag_log_owner ON player_bag_log (player_uuid, created_at);
+CREATE INDEX IF NOT EXISTS idx_bag_log_time ON player_bag_log (created_at);
+
 -- 清掉舊版建立過的 trigger（如存在）；schema 檔不可含 BEGIN ... END 區塊，
 -- 因為 splitStatements() 以分號切割語句
 DROP TRIGGER IF EXISTS player_info_touch_last_update;

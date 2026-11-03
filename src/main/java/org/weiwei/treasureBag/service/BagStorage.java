@@ -8,16 +8,18 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitTask;
 import org.weiwei.treasureBag.Main;
 import org.weiwei.treasureBag.data.BagChanges;
+import org.weiwei.treasureBag.data.BagLog;
 import org.weiwei.treasureBag.data.PlayerBagRepository;
 import org.weiwei.treasureBag.dataBase.DataBase;
 import org.weiwei.treasureBag.entity.PlayerBag;
 import org.weiwei.treasureBag.entity.PlayerInfo;
+import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.Message;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,6 +46,8 @@ import java.util.logging.Level;
 public class BagStorage {
 
     private static final long RETRY_PERIOD_TICKS = 20L * 10;
+    private static final long LOG_CLEAN_PERIOD_TICKS = 20L * 60 * 60 * 6;
+    private static final int DEFAULT_LOG_KEEP_DAYS = 30;
     private static final long SHUTDOWN_WAIT_SECONDS = 15;
     private static final String UNSAVED_FOLDER = "unsaved";
 
@@ -59,7 +63,10 @@ public class BagStorage {
 
     private static ExecutorService executor;
     private static BukkitTask retryTask;
+    private static BukkitTask logCleanTask;
     private static volatile boolean shuttingDown;
+    /** 分流名稱，寫進存取紀錄；Config.yml 沒設 SERVER_NAME 就用伺服器資料夾名稱（lobby、ads_01…） */
+    private static String serverName;
 
     /**
      * 啟動 IO 執行緒與重試排程（資料庫初始化成功後呼叫）
@@ -74,9 +81,35 @@ public class BagStorage {
             thread.setDaemon(true);
             return thread;
         });
+        serverName = resolveServerName();
         retryTask = Bukkit.getScheduler().runTaskTimerAsynchronously(
                 Main.getInst(), BagStorage::retryUnsaved, RETRY_PERIOD_TICKS, RETRY_PERIOD_TICKS);
+        logCleanTask = Bukkit.getScheduler().runTaskTimerAsynchronously(
+                Main.getInst(), BagStorage::cleanLogs, 20L * 60, LOG_CLEAN_PERIOD_TICKS);
         recoverUnsavedFiles();
+    }
+
+    private static String resolveServerName() {
+        String configured = ConfigManager.getConfig() != null ? ConfigManager.getConfig().getString("SERVER_NAME") : null;
+        if (configured != null && !configured.isBlank()) return configured.trim();
+        Path folder = Bukkit.getWorldContainer().getAbsoluteFile().toPath().normalize().getFileName();
+        return folder != null ? folder.toString() : "unknown";
+    }
+
+    /**
+     * 刪掉超過保留天數的存取紀錄（每台都會跑，重複刪不影響結果）
+     */
+    private static void cleanLogs() {
+        int days = ConfigManager.getConfig() != null
+                ? ConfigManager.getConfig().getInt("LOG_KEEP_DAYS", DEFAULT_LOG_KEEP_DAYS)
+                : DEFAULT_LOG_KEEP_DAYS;
+        if (days <= 0) return;
+        try {
+            int deleted = REPOSITORY.deleteLogsBefore(System.currentTimeMillis() - TimeUnit.DAYS.toMillis(days));
+            if (deleted > 0) logInfo("已清除 " + days + " 天前的背包存取紀錄 " + deleted + " 筆");
+        } catch (Exception e) {
+            logWarning("清理背包存取紀錄失敗: " + e.getMessage());
+        }
     }
 
     /**
@@ -85,7 +118,7 @@ public class BagStorage {
      * @param brokenRows 讀不出來的格位，連同溢出範圍的一起列出
      */
     record LoadedBag(PlayerInfo playerInfo, Map<Integer, ItemStack> items, Map<Integer, String> baseline,
-                     Map<Integer, ItemStack> baselineItems, Set<Integer> brokenRows) {
+                     Map<Integer, ItemStack> baselineItems, Set<Integer> brokenRows, Map<Integer, String> pageNames) {
     }
 
     /**
@@ -117,7 +150,8 @@ public class BagStorage {
                 // 另存一份不會被背包操作改到的副本，關背包時拿來比對物品本身
                 baselineItems.put(slot, item.clone());
             }
-            return new LoadedBag(playerInfo, items, baseline, baselineItems, broken);
+            Map<Integer, String> pageNames = new HashMap<>(REPOSITORY.loadPageNames(owner));
+            return new LoadedBag(playerInfo, items, baseline, baselineItems, broken, pageNames);
         });
     }
 
@@ -129,13 +163,31 @@ public class BagStorage {
     }
 
     /**
-     * 刪除已掉落到地上的溢出格位
+     * 直接寫入一組變更，失敗時回傳失敗的 future（不進重試佇列，由呼叫端決定怎麼處理）
+     * 強制開啟用它刪溢出格：刪除與存取紀錄同一筆交易，失敗就不掉物品
      */
-    static CompletableFuture<Void> deleteSlots(UUID owner, Collection<Integer> slots) {
-        return enqueue(owner, () -> {
-            REPOSITORY.deleteSlots(owner, slots);
+    static CompletableFuture<Void> apply(BagChanges changes) {
+        return enqueue(changes.owner(), () -> {
+            REPOSITORY.applyChanges(changes, false, serverName);
             return null;
         });
+    }
+
+    /**
+     * 設定頁面名稱（name 為 null 表示清除）
+     */
+    static CompletableFuture<Void> savePageName(UUID owner, int page, String name) {
+        return enqueue(owner, () -> {
+            REPOSITORY.savePageName(owner, page, name);
+            return null;
+        });
+    }
+
+    /**
+     * 讀取存取紀錄（新的在前）
+     */
+    static CompletableFuture<List<BagLog>> loadLogs(UUID owner, int offset, int limit) {
+        return CompletableFuture.supplyAsync(() -> REPOSITORY.loadLogs(owner, offset, limit), executor);
     }
 
     /**
@@ -150,7 +202,7 @@ public class BagStorage {
             BagChanges changes = snapshot.diff();
             if (changes.isEmpty()) return null;
             try {
-                REPOSITORY.applyChanges(changes, false);
+                REPOSITORY.applyChanges(changes, false, serverName);
             } catch (Exception e) {
                 logSevere("無法保存玩家背包，稍後自動重試: " + snapshot.ownerName(), e);
                 UNSAVED.merge(snapshot.owner(), changes, BagChanges::then);
@@ -171,7 +223,7 @@ public class BagStorage {
         if (changes.isEmpty()) return;
         enqueue(changes.owner(), () -> {
             try {
-                REPOSITORY.applyChanges(changes, false);
+                REPOSITORY.applyChanges(changes, false, serverName);
             } catch (Exception e) {
                 logSevere("無法寫回溢出物品，稍後自動重試: " + changes.ownerName(), e);
                 UNSAVED.merge(changes.owner(), changes, BagChanges::then);
@@ -195,6 +247,7 @@ public class BagStorage {
     static void shutdown(List<BagSession.Snapshot> openBags) {
         shuttingDown = true;
         if (retryTask != null) retryTask.cancel();
+        if (logCleanTask != null) logCleanTask.cancel();
 
         try {
             CompletableFuture.allOf(TAILS.values().toArray(new CompletableFuture[0]))
@@ -230,7 +283,7 @@ public class BagStorage {
             if (pending != null) changes = pending.then(changes);
             if (changes.isEmpty()) continue;
             try {
-                REPOSITORY.applyChanges(changes, false);
+                REPOSITORY.applyChanges(changes, false, serverName);
             } catch (Exception e) {
                 logSevere("停用時無法保存玩家背包，改存成檔案: " + snapshot.ownerName(), e);
                 dump(changes, "");
@@ -245,7 +298,7 @@ public class BagStorage {
             enqueue(owner, () -> {
                 BagChanges changes = UNSAVED.get(owner);
                 if (changes == null) return null;
-                List<BagChanges.SlotChange> conflicts = REPOSITORY.applyChanges(changes, true);
+                List<BagChanges.SlotChange> conflicts = REPOSITORY.applyChanges(changes, true, serverName);
                 UNSAVED.remove(owner, changes);
                 logInfo("背包補存完成: " + changes.ownerName() + "（" + changes.size() + " 格）");
                 reportConflicts(changes, conflicts);
@@ -263,7 +316,7 @@ public class BagStorage {
 
     private static void writeStrictOrDump(BagChanges changes) {
         try {
-            reportConflicts(changes, REPOSITORY.applyChanges(changes, true));
+            reportConflicts(changes, REPOSITORY.applyChanges(changes, true, serverName));
         } catch (Exception e) {
             logSevere("停用時無法補存玩家背包，改存成檔案: " + changes.ownerName(), e);
             dump(changes, "");
@@ -337,7 +390,7 @@ public class BagStorage {
                     }
                 }
 
-                reportConflicts(changes, REPOSITORY.applyChanges(changes, true));
+                reportConflicts(changes, REPOSITORY.applyChanges(changes, true, serverName));
                 File done = new File(file.getParentFile(), file.getName() + ".applied");
                 if (!file.renameTo(done)) logWarning("補寫完成但無法改名: " + file.getPath());
                 logInfo("已補寫上次未存的背包: " + changes.ownerName() + "（" + changes.size() + " 格）");

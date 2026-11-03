@@ -11,7 +11,6 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -205,11 +204,14 @@ public class PlayerBagRepository {
      * 失敗重試與開機補寫用嚴格模式：資料庫目前的內容要等於變更記下的原值才寫，
      * 不相等代表這段時間別台已經改過，該格跳過並回傳給呼叫端處理。
      *
-     * @param changes 格位變更
+     * 同一筆交易也寫入這次的存取紀錄。
+     *
+     * @param changes 格位變更與存取紀錄
      * @param strict  是否比對原值
+     * @param server  分流名稱（寫進存取紀錄）
      * @return 嚴格模式下比對不符而沒寫入的格位
      */
-    public List<BagChanges.SlotChange> applyChanges(BagChanges changes, boolean strict) {
+    public List<BagChanges.SlotChange> applyChanges(BagChanges changes, boolean strict, String server) {
         List<BagChanges.SlotChange> conflicts = new ArrayList<>();
         if (changes == null || changes.isEmpty()) return conflicts;
         String uuid = changes.owner().toString();
@@ -253,6 +255,7 @@ public class PlayerBagRepository {
                     if (hasReplace) replace.executeBatch();
                 }
 
+                insertLogs(connection, changes, server);
                 connection.commit();
             } catch (Exception e) {
                 connection.rollback();
@@ -264,34 +267,124 @@ public class PlayerBagRepository {
         return conflicts;
     }
 
-    /**
-     * 刪除指定的格位（強制開啟時清掉已掉落到地上的溢出物品）
-     */
-    public void deleteSlots(UUID playerUUID, Collection<Integer> slots) {
-        if (playerUUID == null || slots == null || slots.isEmpty()) return;
+    private void insertLogs(Connection connection, BagChanges changes, String server) throws Exception {
+        if (changes.logs().isEmpty()) return;
 
+        long now = System.currentTimeMillis();
+        try (PreparedStatement insert = connection.prepareStatement(
+                "INSERT INTO player_bag_log (player_uuid, viewer_uuid, viewer_name, server, source, material, item_name, amount, created_at)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )) {
+            for (BagChanges.LogEntry entry : changes.logs()) {
+                insert.setString(1, changes.owner().toString());
+                insert.setString(2, changes.viewer() != null ? changes.viewer().toString() : null);
+                insert.setString(3, changes.viewerName());
+                insert.setString(4, server);
+                insert.setString(5, changes.source());
+                insert.setString(6, entry.material());
+                insert.setString(7, entry.itemName());
+                insert.setInt(8, entry.amount());
+                insert.setLong(9, now);
+                insert.addBatch();
+            }
+            insert.executeBatch();
+        }
+    }
+
+    /**
+     * 存取紀錄，新的在前
+     */
+    public List<BagLog> loadLogs(UUID playerUUID, int offset, int limit) {
+        List<BagLog> logs = new ArrayList<>();
         try (Connection connection = DataBase.getConnection()) {
             if (connection == null) throw new IllegalStateException("資料庫連線不可用");
 
-            try {
-                connection.setAutoCommit(false);
-                try (PreparedStatement statement = connection.prepareStatement(
-                        "DELETE FROM player_bag WHERE player_uuid = ? AND solder = ?"
-                )) {
-                    for (int slot : slots) {
-                        statement.setString(1, playerUUID.toString());
-                        statement.setLong(2, slot);
-                        statement.addBatch();
+            try (PreparedStatement select = connection.prepareStatement(
+                    "SELECT viewer_uuid, viewer_name, server, source, material, item_name, amount, created_at FROM player_bag_log"
+                            + " WHERE player_uuid = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
+            )) {
+                select.setString(1, playerUUID.toString());
+                select.setInt(2, limit);
+                select.setInt(3, offset);
+                try (ResultSet resultSet = select.executeQuery()) {
+                    while (resultSet.next()) {
+                        String viewer = resultSet.getString("viewer_uuid");
+                        logs.add(new BagLog(viewer != null ? UUID.fromString(viewer) : null,
+                                resultSet.getString("viewer_name"), resultSet.getString("server"),
+                                resultSet.getString("source"), resultSet.getString("material"),
+                                resultSet.getString("item_name"), resultSet.getInt("amount"),
+                                resultSet.getLong("created_at")));
                     }
-                    statement.executeBatch();
                 }
-                connection.commit();
-            } catch (Exception e) {
-                connection.rollback();
-                throw e;
             }
         } catch (Exception e) {
-            throw new IllegalStateException("無法刪除玩家超出背包格資料: " + playerUUID, e);
+            throw new IllegalStateException("無法讀取背包存取紀錄: " + playerUUID, e);
+        }
+        return logs;
+    }
+
+    /**
+     * 刪除指定時間以前的存取紀錄
+     *
+     * @return 刪除筆數
+     */
+    public int deleteLogsBefore(long millis) {
+        try (Connection connection = DataBase.getConnection()) {
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
+
+            try (PreparedStatement delete = connection.prepareStatement(
+                    "DELETE FROM player_bag_log WHERE created_at < ?"
+            )) {
+                delete.setLong(1, millis);
+                return delete.executeUpdate();
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("無法清理背包存取紀錄", e);
+        }
+    }
+
+    /**
+     * 玩家自訂的頁面名稱（頁碼 0 起算）
+     */
+    public Map<Integer, String> loadPageNames(UUID playerUUID) {
+        Map<Integer, String> names = new HashMap<>();
+        try (Connection connection = DataBase.getConnection()) {
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
+
+            try (PreparedStatement select = connection.prepareStatement(
+                    "SELECT page, name FROM player_bag_page WHERE player_uuid = ?"
+            )) {
+                select.setString(1, playerUUID.toString());
+                try (ResultSet resultSet = select.executeQuery()) {
+                    while (resultSet.next()) {
+                        names.put(resultSet.getInt("page"), resultSet.getString("name"));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("無法讀取背包頁面名稱: " + playerUUID, e);
+        }
+        return names;
+    }
+
+    /**
+     * 設定頁面名稱；name 為 null 表示清除
+     */
+    public void savePageName(UUID playerUUID, int page, String name) {
+        try (Connection connection = DataBase.getConnection()) {
+            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
+
+            String sql = name == null
+                    ? "DELETE FROM player_bag_page WHERE player_uuid = ? AND page = ?"
+                    : "REPLACE INTO player_bag_page (player_uuid, page, name) VALUES (?, ?, ?)";
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                statement.setString(1, playerUUID.toString());
+                statement.setInt(2, page);
+                if (name != null) statement.setString(3, name);
+                statement.executeUpdate();
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("無法保存背包頁面名稱: " + playerUUID, e);
         }
     }
 

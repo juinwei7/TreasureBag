@@ -2,6 +2,7 @@ package org.weiwei.treasureBag.customGui;
 
 import lombok.Getter;
 import lombok.Setter;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -43,6 +44,13 @@ public class CustomGui implements InventoryHolder {
         this.guiType = type;
         this.player = player;
         if (title == null || title.isEmpty()) title = type.getDefTitle();
+        this.inventory = Bukkit.createInventory(this, type.getSize(), title);
+    }
+
+    /// 用 Component 當標題（材質介面要指定字型與顏色）
+    public CustomGui(GuiType type, Player player, Component title) {
+        this.guiType = type;
+        this.player = player;
         this.inventory = Bukkit.createInventory(this, type.getSize(), title);
     }
 

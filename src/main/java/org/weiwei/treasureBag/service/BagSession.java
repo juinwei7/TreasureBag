@@ -6,7 +6,9 @@ import org.weiwei.treasureBag.entity.PlayerInfo;
 import org.weiwei.treasureBag.util.ItemManage;
 import org.weiwei.treasureBag.util.ItemSerialize;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -26,17 +28,20 @@ class BagSession {
     private final Map<Integer, String> baseline;
     private final Map<Integer, ItemStack> baselineItems;
     private final Set<Integer> brokenSlots;
+    private final Map<Integer, String> pageNames;
     private final boolean readOnly;
     private int page;
 
     BagSession(PlayerInfo owner, int maxSlot, Map<Integer, ItemStack> items, Map<Integer, String> baseline,
-               Map<Integer, ItemStack> baselineItems, Set<Integer> brokenSlots, boolean readOnly) {
+               Map<Integer, ItemStack> baselineItems, Set<Integer> brokenSlots, Map<Integer, String> pageNames,
+               boolean readOnly) {
         this.owner = owner;
         this.maxSlot = maxSlot;
         this.items = items;
         this.baseline = baseline;
         this.baselineItems = baselineItems;
         this.brokenSlots = brokenSlots;
+        this.pageNames = pageNames;
         this.readOnly = readOnly;
     }
 
@@ -60,6 +65,10 @@ class BagSession {
         return brokenSlots;
     }
 
+    Map<Integer, String> pageNames() {
+        return pageNames;
+    }
+
     boolean readOnly() {
         return readOnly;
     }
@@ -76,13 +85,14 @@ class BagSession {
      * 結束 session 時取出要存的內容；序列化與比對交給 IO 執行緒跑
      * session 結束後 items 不會再被改動，直接交出去不必複製
      */
-    Snapshot snapshot() {
-        return new Snapshot(owner.getPlayerUUID(), owner.getPlayerName(), maxSlot,
+    Snapshot snapshot(UUID viewer, String viewerName) {
+        return new Snapshot(owner.getPlayerUUID(), owner.getPlayerName(), viewer, viewerName, maxSlot,
                 new HashMap<>(items), baseline, baselineItems, brokenSlots);
     }
 
-    record Snapshot(UUID owner, String ownerName, int maxSlot, Map<Integer, ItemStack> items,
-                    Map<Integer, String> baseline, Map<Integer, ItemStack> baselineItems, Set<Integer> brokenSlots) {
+    record Snapshot(UUID owner, String ownerName, UUID viewer, String viewerName, int maxSlot,
+                    Map<Integer, ItemStack> items, Map<Integer, String> baseline,
+                    Map<Integer, ItemStack> baselineItems, Set<Integer> brokenSlots) {
 
         /**
          * 算出跟讀進來時不同的格位
@@ -91,7 +101,7 @@ class BagSession {
          * 單一物品序列化失敗時保留資料庫原值並記錄，不讓整包存檔失敗
          */
         BagChanges diff() {
-            BagChanges changes = new BagChanges(owner, ownerName);
+            BagChanges changes = new BagChanges(owner, ownerName).by(viewer, viewerName, BagChanges.SOURCE_CLOSE);
             for (int slot = 0; slot < maxSlot; slot++) {
                 if (brokenSlots.contains(slot)) continue;
 
@@ -117,7 +127,45 @@ class BagSession {
                     changes.put(new BagChanges.SlotChange(slot, expected, value, ItemManage.nameOf(item)));
                 }
             }
+            if (!changes.changes().isEmpty()) netChanges().forEach(changes::addLog);
             return changes;
+        }
+
+        /**
+         * 每種物品這次的淨增減（背包內換位置不算）
+         * 同種的判斷用 isSimilar，數量不同的同一種物品會合併計算
+         */
+        private List<BagChanges.LogEntry> netChanges() {
+            List<ItemStack> kinds = new ArrayList<>();
+            List<int[]> counts = new ArrayList<>();
+            for (int slot = 0; slot < maxSlot; slot++) {
+                if (brokenSlots.contains(slot)) continue;
+                count(kinds, counts, baselineItems.get(slot), 0);
+                count(kinds, counts, items.get(slot), 1);
+            }
+
+            List<BagChanges.LogEntry> entries = new ArrayList<>();
+            for (int i = 0; i < kinds.size(); i++) {
+                int delta = counts.get(i)[1] - counts.get(i)[0];
+                if (delta == 0) continue;
+                ItemStack kind = kinds.get(i);
+                entries.add(new BagChanges.LogEntry(kind.getType().name(), ItemManage.nameOf(kind), delta));
+            }
+            return entries;
+        }
+
+        private static void count(List<ItemStack> kinds, List<int[]> counts, ItemStack item, int side) {
+            if (item == null || item.getType().isAir()) return;
+            for (int i = 0; i < kinds.size(); i++) {
+                if (kinds.get(i).isSimilar(item)) {
+                    counts.get(i)[side] += item.getAmount();
+                    return;
+                }
+            }
+            kinds.add(item);
+            int[] count = new int[2];
+            count[side] = item.getAmount();
+            counts.add(count);
         }
     }
 }

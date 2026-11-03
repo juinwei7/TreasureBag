@@ -47,14 +47,6 @@ public class ItemManage {
     }
 
     /**
-     * 創建物品 包含Nbt
-     * @return ItemStack
-     */
-    public static ItemStack getDefaultItem() {
-        return createItem(Material.GRAY_STAINED_GLASS_PANE, " ", null, 0);
-    }
-
-    /**
      * 讀不出來的格位佔位物品（該格資料保留在資料庫，不能操作）
      */
     public static ItemStack getBrokenItem() {

@@ -35,6 +35,17 @@ MESSAGE:
   BAG_SAVE_FAILED: '§c隨身背包暫時無法存檔，物品已保留，系統會自動補存'
   BAG_SAVE_RECOVERED: '§a隨身背包已補存完成'
   BAG_READ_ONLY: '§e{0} 不在這個分流，以唯讀模式開啟（要修改請加 edit）'
+  BAG_DEPOSITED: '§a已存入 §f{0} §a個物品'
+  BAG_DEPOSIT_NONE: '§7身上沒有背包裡已經有的物品'
+  BAG_FULL: '§c隨身背包已經滿了'
+  BAG_RENAME_HINT: '§e§n點這裡§r§e幫第 {0} 頁取名字（最多 {1} 個字，不打名字就是清除）'
+  BAG_RENAMED: '§a第 {0} 頁取名為「§f{1}§a」'
+  BAG_RENAME_CLEARED: '§a第 {0} 頁的名字已清除'
+  BAG_RENAME_TOO_LONG: '§c頁面名字最多 {0} 個字'
+  BAG_INVALID_PAGE: '§c頁碼要在 1～{0} 之間'
+  BAG_LOG_HEADER: '§e{0} §f的背包存取紀錄 §7（第 {1} 頁，新的在上面）'
+  BAG_LOG_EMPTY: '§7沒有紀錄'
+  BAG_LOG_NEXT: '§e§l[下一頁]'
   DB_TYPE_CHANGED: '§e偵測到 DataBase.yml 的 type 已改為 §f{0}§e，資料庫設定需重啟伺服器才會生效（目前仍使用 §f{1}§e）'
 
 # 時間格式
@@ -51,6 +62,8 @@ COMMAND:
   OPEN: 開啟隨身背包
   RELOAD: 重新載入設定
   FORCE: 強制開啟隨身背包
+  NAME: 幫背包頁面取名字
+  LOG: 查看玩家的背包存取紀錄
 
 ADMIN_MESSAGE:
   EDIT_DISABLED: '已停用'

@@ -7,13 +7,13 @@ Paper 伺服器用的隨身背包插件。玩家可以透過指令開啟自己�
 - `/treasurebag` 或 `/bag` 直接開啟自己的隨身背包
 - `/treasurebag open [玩家名稱]` 開啟自己或指定玩家的背包
 - 權限決定玩家可用背包格數
-- 支援多頁背包
-- 最後一排為控制列：
-  - 中間：背包資訊
-  - 左側：上一頁
-  - 右側：下一頁
-  - 其他格子補灰色玻璃片
-- 超出權限可用格數的格子會補灰色玻璃片，不能放入物品
+- 支援多頁背包，最後一排為控制列：整理、一鍵存入、頁籤 1～5（點了直接跳頁，超出權限的頁顯示上鎖）、背包資訊
+- 整理：依物品種類排好，同種物品自動疊在一起
+- 一鍵存入：身上（不含快捷列、裝備、副手）只要背包裡已經有同種的物品，就全部存進去
+- 頁面命名：右鍵頁籤後輸入 `/bag name <頁碼> <名稱>`，名稱顯示在頁籤與標題
+- 存取紀錄：每次關背包記下每種物品的淨增減（背包內換位置不算），管理員用 `/bag log <玩家>` 查，保留 30 天
+- 有裝伺服器材質包的玩家看到材質介面（背景字 U+E0A0、按鈕 CustomModelData 870～880）；沒裝的看到純文字標題與原版物品
+- 超出權限可用格數的格子會顯示上鎖，不能放入物品
 - 關閉背包時自動保存到資料庫（背景執行緒寫入，只寫有變動的格子，不卡主執行緒）
 - 支援從玩家背包 shift-click 快速移入隨身背包
 - 禁止把界伏盒、收納袋等可攜式容器放入隨身背包
@@ -27,6 +27,7 @@ Paper 伺服器用的隨身背包插件。玩家可以透過指令開啟自己�
 - Paper `1.21.11`
 - MySQL 或 SQLite（SQLite 不需額外安裝，driver 已內含於插件 jar）
 - Minepacks：選用，只有從 Minepacks 匯入資料（`/treasurebag trade`）時需要一起安裝
+- Hu_custom：選用，用來讀玩家有沒有裝材質包（Redis 旗標 `hu_custom:pack:<uuid>`）；沒裝就一律當有材質包
 
 ## 安裝
 
@@ -56,6 +57,15 @@ MAX_SLOT:
   VIP2: 135
   VIP3: 180
   VIP4: 225
+```
+
+另外兩個選填設定（舊的 Config.yml 沒有也沒關係，會用預設值）：
+
+```yaml
+# 寫進存取紀錄的分流名稱；不填就用伺服器資料夾名稱（lobby、ads_01…）
+SERVER_NAME: lobby
+# 存取紀錄保留天數，0 表示不清理；預設 30
+LOG_KEEP_DAYS: 30
 ```
 
 對應權限格式：
@@ -112,6 +122,8 @@ sqlite:
 | `/treasurebag open <玩家>` | 開啟指定玩家背包（對方不在這台時唯讀） | `treasure-bag.admin` |
 | `/treasurebag open <玩家> edit` | 對方不在這台時也允許修改 | `treasure-bag.admin` |
 | `/treasurebag force` | 強制開啟自己的背包，並處理超出容量的物品 | 無 |
+| `/treasurebag name <頁碼> [名稱]` | 幫自己的背包頁面取名字（最多 8 個字，不給名稱就是清除） | 無 |
+| `/treasurebag log <玩家> [頁碼]` | 查看玩家的背包存取紀錄（主控台也能用） | `treasure-bag.admin` |
 | `/treasurebag reload` | 重新載入設定檔 | `treasure.reload` |
 | `/treasurebag trade` | 顯示 Minepacks 轉移的確認提示 | `treasure.trade` |
 | `/treasurebag trade confirm` | 確認並執行 Minepacks 轉移 | `treasure.trade` |
@@ -202,6 +214,8 @@ TreasureBag 支援從 **Minepacks** 插件匯入既有的背包資料，方便�
 
 - `player_info`：玩家 UUID、名稱、建立時間、更新時間
 - `player_bag`：玩家 UUID、格位、序列化物品、物品名稱
+- `player_bag_page`：玩家自訂的頁面名稱
+- `player_bag_log`：存取紀錄（操作者、分流、物品、淨增減、毫秒時間戳）
 
 背包物品以 Bukkit `ItemStack` 序列化後存入資料庫。
 

@@ -7,6 +7,7 @@ import org.weiwei.treasureBag.command.MainCommand;
 import org.weiwei.treasureBag.dataBase.DataBase;
 import org.weiwei.treasureBag.listener.PlayerBagListener;
 import org.weiwei.treasureBag.service.BagStorage;
+import org.weiwei.treasureBag.service.BagTitle;
 import org.weiwei.treasureBag.service.PlayerBagService;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.Message;
@@ -44,6 +45,7 @@ public final class Main extends JavaPlugin {
         mainCommand.setup(COMMAND);
 
         Bukkit.getPluginManager().registerEvents(new PlayerBagListener(), this);
+        BagTitle.setup(this);
 
     }
 

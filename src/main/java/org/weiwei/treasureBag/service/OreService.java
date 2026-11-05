@@ -53,7 +53,7 @@ public final class OreService {
     private static final long ACTION_COOLDOWN_MS = 200;
     /** Config.yml 沒寫 ORE.SPACE 時的容量（件數），鍵是背包權限 treasure-bag.<鍵>，玩家有好幾個取最大 */
     private static final Map<String, Long> DEFAULT_SPACE = Map.of(
-            "DEFAULT", 1_000L, "VIP", 2_000L, "VIP2", 4_000L, "VIP3", 8_000L, "VIP4", 16_000L);
+            "DEFAULT", 2_000L, "VIP", 4_000L, "VIP2", 8_000L, "VIP3", 16_000L, "VIP4", 32_000L);
     private static final int DEFAULT_MAX_KINDS = 135;
     /** Config.yml 沒寫 ORE.DEFAULT_LIST 時新玩家的清單：沿用 ExtraStorage 的白名單，補上青金石 */
     private static final List<String> DEFAULT_LIST = List.of(

@@ -19,11 +19,11 @@ ORE:
   # 每人可存的總件數（所有物品加起來），照背包同一組權限 treasure-bag.<階級>，有好幾個取最大；
   # /bag oreadmin space 個別設定優先。存量超過容量的只能取出，取到容量以下才能再存
   SPACE:
-    DEFAULT: 1000
-    VIP: 2000
-    VIP2: 4000
-    VIP3: 8000
-    VIP4: 16000
+    DEFAULT: 2000
+    VIP: 4000
+    VIP2: 8000
+    VIP3: 16000
+    VIP4: 32000
   # 清單最多幾種物品
   MAX_KINDS: 135
   # true：挖方塊掉的東西身上放不下才收進倉庫；false：清單裡有開自動收集的全部收

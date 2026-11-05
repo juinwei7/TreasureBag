@@ -178,7 +178,7 @@ sqlite:
 
 從 ExtraStorage 搬進背包的分頁。資料放在背包的資料庫（`player_ore`、`player_ore_setting`），每個分流共用同一個倉庫。
 
-- 算件數不算格子，容量照 VIP 階級（跟背包同一組權限 `treasure-bag.<階級>`，取最大）：一般 1,000、VIP 2,000、VIP2 4,000、VIP3 8,000、VIP4 16,000（`Config.yml` 的 `ORE.SPACE`）；`/bag oreadmin space` 個別設定優先。存量超過容量的只能取出，取到容量以下才能再存，自動收集也先停。
+- 算件數不算格子，容量照 VIP 階級（跟背包同一組權限 `treasure-bag.<階級>`，取最大）：一般 2,000、VIP 4,000、VIP2 8,000、VIP3 16,000、VIP4 32,000（`Config.yml` 的 `ORE.SPACE`）；`/bag oreadmin space` 個別設定優先。存量超過容量的只能取出，取到容量以下才能再存，自動收集也先停。
 - 每人有一張清單（最多 `ORE.MAX_KINDS` 種，預設 135），新玩家拿到 `ORE.DEFAULT_LIST`（ExtraStorage 的白名單＋青金石）；點身上的物品就能加進清單。
 - 挖方塊掉出來的東西，身上放不下的部分收進倉庫（`ORE.ONLY_WHEN_FULL: false` 就是全部收）；清單裡每種物品可以個別關掉自動收集，也有總開關。
 - 只收跟全新物品一模一樣的原版物品：改名、附魔、有損耗、自製物品都不收，避免存進去再拿出來變成原版的。

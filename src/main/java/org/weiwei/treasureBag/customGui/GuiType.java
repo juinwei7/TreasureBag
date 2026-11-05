@@ -18,6 +18,9 @@ public enum GuiType {
     // 隨身背包
     BAG_MENU(Message.MENU_TITLE__BAG_MENU, 54),
 
+    // 礦物倉庫（背包裡的分頁）
+    ORE_MENU(Message.MENU_TITLE__ORE_MENU, 54),
+
     // 查看禮包
     VIEW_MENU(Message.MENU_TITLE__VIEW_MENU, 54),
 

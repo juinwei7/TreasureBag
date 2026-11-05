@@ -89,6 +89,10 @@ public class BagStorage {
         recoverUnsavedFiles();
     }
 
+    static String serverName() {
+        return serverName;
+    }
+
     private static String resolveServerName() {
         String configured = ConfigManager.getConfig() != null ? ConfigManager.getConfig().getString("SERVER_NAME") : null;
         if (configured != null && !configured.isBlank()) return configured.trim();
@@ -411,7 +415,10 @@ public class BagStorage {
 
     // ---------- 工具 ----------
 
-    private static <T> CompletableFuture<T> enqueue(UUID owner, Supplier<T> task) {
+    /**
+     * 排進這位擁有者的佇列（礦物倉庫也走這裡，跟背包共用 IO 執行緒與順序）
+     */
+    static <T> CompletableFuture<T> enqueue(UUID owner, Supplier<T> task) {
         CompletableFuture<T> next = new CompletableFuture<>();
         TAILS.compute(owner, (key, previous) -> {
             CompletableFuture<?> before = previous != null ? previous : DONE;

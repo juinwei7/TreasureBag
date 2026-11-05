@@ -20,6 +20,7 @@ Paper 伺服器用的隨身背包插件。玩家可以透過指令開啟自己�
 - 玩家權限降級導致背包容量縮小時，會先警告，不會直接噴出物品
 - `/treasurebag force` 可由玩家確認後強制開啟，並將超出容量的物品掉落到玩家腳下
 - `/treasurebag trade` 可將 Minepacks 背包資料轉移到 TreasureBag
+- 礦物倉庫：背包控制列多一個分頁（也可以 `/bag ore`），取代 ExtraStorage，詳見下方「礦物倉庫」
 
 ## 環境需求
 
@@ -127,6 +128,11 @@ sqlite:
 | `/treasurebag reload` | 重新載入設定檔 | `treasure.reload` |
 | `/treasurebag trade` | 顯示 Minepacks 轉移的確認提示 | `treasure.trade` |
 | `/treasurebag trade confirm` | 確認並執行 Minepacks 轉移 | `treasure.trade` |
+| `/bag ore`、`/exstorage`、`/storage` | 打開自己的礦物倉庫 | 無 |
+| `/bag ore <玩家>` | 查看別人的礦物倉庫（唯讀） | `treasure-bag.admin` |
+| `/bag oreadmin add\|take <玩家> <物品> <數量>` | 補發／扣除礦物倉庫物品（主控台也能用） | `treasure-bag.admin` |
+| `/bag oreadmin space <玩家> <件數\|default>` | 個別容量 | `treasure-bag.admin` |
+| `/bag oreadmin import` | 重跑這台的 ExtraStorage 匯入（只限主控台） | 主控台 |
 
 `/bag` 是 `/treasurebag` 的別名，因此也可以使用 `/bag open`、`/bag force`。
 
@@ -167,6 +173,22 @@ sqlite:
 - 讀不出來的格子（例如版本升級後舊資料解不開）會顯示成屏障「無法讀取的物品」並鎖住，資料庫那一列原封不動，不會因為存檔被刪掉。
 - 存檔失敗時物品留在伺服器記憶體，每 10 秒自動補存；補存完成前這個背包不能再開。
 - 外掛停用（關服、plugman reload）時會先存掉還開著的背包；資料庫連不上就寫成 `plugins/TreasureBag/unsaved/*.yml`，下次啟動自動補寫。補寫時發現那格已經被別台改過就不覆蓋，另存成 `*-conflict.yml` 並在主控台記錄，交給管理員處理。
+
+## 礦物倉庫
+
+從 ExtraStorage 搬進背包的分頁。資料放在背包的資料庫（`player_ore`、`player_ore_setting`），每個分流共用同一個倉庫。
+
+- 算件數不算格子：每人預設 100,000 件（`Config.yml` 的 `ORE.SPACE`），`/bag oreadmin space` 個別調整。
+- 每人有一張清單（最多 `ORE.MAX_KINDS` 種，預設 135），新玩家拿到 `ORE.DEFAULT_LIST`（ExtraStorage 的白名單＋青金石）；點身上的物品就能加進清單。
+- 挖方塊掉出來的東西，身上放不下的部分收進倉庫（`ORE.ONLY_WHEN_FULL: false` 就是全部收）；清單裡每種物品可以個別關掉自動收集，也有總開關。
+- 只收跟全新物品一模一樣的原版物品：改名、附魔、有損耗、自製物品都不收，避免存進去再拿出來變成原版的。
+- 畫面：45 一鍵存入（不含快捷列）、46 自動收集開關、47～51 回背包、52 礦物倉庫（超過 45 種時點它翻頁）、53 資訊。物品格：左鍵取一組、Shift＋左鍵取到身上放滿、右鍵存入身上所有這種、Shift＋右鍵開關自動收集、數量 0 時按 Q 從清單移除。
+- 材質包：背景同背包 U+E0A0；`paper` 881／882 礦物倉庫分頁、`lime_dye`／`gray_dye` 870 自動收集開關。
+- 存取紀錄：存入、取出、管理員調整、舊資料匯入都寫進 `/bag log`（自動收集不記，太頻繁）。
+
+**資料安全**：數量只用 `amount = amount + ?` 增減，取出用 `amount >= ?` 條件扣，扣成功才把物品交給玩家；各分流同時寫也不會互蓋或多扣，所以不需要背包那種擁有者鎖。自動收集先記在這台、每 5 秒送一次；寫不進去就留著重試，關服時還寫不進去就存成 `plugins/TreasureBag/unsaved-ore/*.yml` 下次啟動補寫。資料庫扣了、還沒交到玩家手上的取出（關服剛好卡在中間），關服時寫回倉庫。
+
+**從 ExtraStorage 搬過來**：開機時如果有 `plugins/ExtraStorage/extrastorage.db` 而且 ExtraStorage 已經移除，就自動匯入：舊寫法（`COAL:0`、`LAPIS_LAZULI:4`）合併成同一種，數量加進中央資料庫（多台各匯各的、自動相加），自動收集清單、總開關、個別容量一起帶過來；全部是 0 又沒改過設定的玩家略過（第一次打開時拿到預設清單）。整份同一筆交易，`ore_import` 記「分流:檔案 MD5」不會重複匯入，完成後檔案改名 `.imported`。對不到原版物品的鍵寫成 `plugins/TreasureBag/ore-import-unknown-<分流>.yml`。ExtraStorage 還裝著就不匯入（不然玩家還能從舊倉庫取出）。
 
 ## 禁止放入的物品
 

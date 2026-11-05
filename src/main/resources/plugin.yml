@@ -13,3 +13,6 @@ commands:
   treasurebag: {}
   bag: {}
   bp: {}
+  # ExtraStorage 時代的舊指令，打開礦物倉庫（同一台不能同時裝 ExtraStorage）
+  exstorage: {}
+  storage: {}

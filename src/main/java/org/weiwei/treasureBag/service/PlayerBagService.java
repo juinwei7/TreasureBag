@@ -16,6 +16,7 @@ import org.weiwei.treasureBag.customGui.CustomGui;
 import org.weiwei.treasureBag.customGui.GuiType;
 import org.weiwei.treasureBag.data.BagChanges;
 import org.weiwei.treasureBag.data.BagLog;
+import org.weiwei.treasureBag.data.OreRepository;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.ItemManage;
 import org.weiwei.treasureBag.util.Message;
@@ -79,6 +80,13 @@ public class PlayerBagService {
      */
     public static void open(Player player) {
         open(player, 0);
+    }
+
+    /**
+     * 開啟背包並跳到指定頁（0 起算；礦物倉庫畫面點頁籤用）
+     */
+    public static void openAt(Player player, int startPage) {
+        open(player, startPage);
     }
 
     private static void open(Player player, int startPage) {
@@ -319,6 +327,14 @@ public class PlayerBagService {
     public static void clickControl(Player player, CustomGui gui, int rawSlot, boolean rightClick) {
         BagSession session = getSession(player);
         if (session == null) return;
+
+        if (rawSlot == BagMenu.ORE_TAB_SLOT) {
+            // 打開倉庫畫面時背包會被關掉，照一般關閉流程存檔；不在點擊事件裡換畫面，排到下一個 tick
+            if (!session.readOnly() && player.getUniqueId().equals(session.ownerUuid())) {
+                Bukkit.getScheduler().runTask(Main.getInst(), () -> OreService.open(player));
+            }
+            return;
+        }
 
         int tabPage = BagMenu.tabPage(session, rawSlot);
         if (tabPage >= 0) {
@@ -636,6 +652,14 @@ public class PlayerBagService {
             line.append(" §8（").append(log.viewerName()).append(" 操作）");
         }
         if (BagChanges.SOURCE_FORCE.equals(log.source())) line.append(" §8（強制開啟掉落）");
+        if (log.source() != null && log.source().startsWith("ore")) {
+            line.append(switch (log.source()) {
+                case OreRepository.SOURCE_ADMIN -> " §8（礦物倉庫・管理員）";
+                case OreRepository.SOURCE_IMPORT -> " §8（礦物倉庫・舊資料匯入）";
+                case OreRepository.SOURCE_RETURN -> " §8（礦物倉庫・放不下退回）";
+                default -> " §8（礦物倉庫）";
+            });
+        }
         return line.toString();
     }
 

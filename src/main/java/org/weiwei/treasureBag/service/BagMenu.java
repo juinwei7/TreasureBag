@@ -14,7 +14,7 @@ import java.util.List;
 /**
  * 背包介面的畫面：標題、內容區、底部控制列
  * <p>
- * 控制列（第 46～54 格）：45 整理、46 一鍵存入、47～51 頁籤、53 資訊，其餘留空讓材質包背景透出來。
+ * 控制列（第 46～54 格）：45 整理、46 一鍵存入、47～51 頁籤、52 礦物倉庫分頁（只有主人自己開時有）、53 資訊。
  * 按鈕用原版物品＋CustomModelData，沒裝材質包的玩家也看得懂是什麼。
  * 頁籤圖示只有 1～5，背包超過 5 頁時頁籤會跟著目前頁滑動，名稱寫的仍是真正頁碼。
  */
@@ -25,6 +25,7 @@ final class BagMenu {
     static final int DEPOSIT_SLOT = 46;
     static final int FIRST_TAB_SLOT = 47;
     static final int TAB_COUNT = 5;
+    static final int ORE_TAB_SLOT = 52;
     static final int INFO_SLOT = 53;
 
     private static final int CMD_BUTTON = 870;
@@ -32,6 +33,8 @@ final class BagMenu {
     private static final int CMD_TAB_CURRENT = 875;
     private static final int CMD_TAB_LOCKED = 880;
     private static final int CMD_LOCKED_SLOT = 870;
+    private static final int CMD_ORE_TAB = 881;
+    private static final int CMD_ORE_TAB_CURRENT = 882;
 
     private BagMenu() {
     }
@@ -80,7 +83,44 @@ final class BagMenu {
             inventory.setItem(FIRST_TAB_SLOT + i, tab(session, start + i, i, maxPage, isOwner && canEdit));
         }
 
+        if (isOwner && canEdit) inventory.setItem(ORE_TAB_SLOT, oreTab(false, 0, 1));
         inventory.setItem(INFO_SLOT, info(session, maxPage, canEdit));
+    }
+
+    /**
+     * 礦物倉庫分頁
+     *
+     * @param current 目前就在礦物倉庫（點了翻頁）
+     */
+    static ItemStack oreTab(boolean current, int page, int maxPage) {
+        List<String> lore = new ArrayList<>();
+        if (current) {
+            lore.add("§a目前在這一頁");
+            if (maxPage > 1) {
+                lore.add("§7第 §f" + (page + 1) + "§7/§f" + maxPage + " §7頁");
+                lore.add("§e左鍵 §7下一頁　§e右鍵 §7上一頁");
+            }
+        } else {
+            lore.add("§7挖方塊時身上放不下的東西會收進來");
+            lore.add("§7每個分流都是同一個倉庫");
+            lore.add("§e左鍵 §7打開");
+        }
+        return ItemManage.createItem(Material.PAPER, "§f礦物倉庫", lore, current ? CMD_ORE_TAB_CURRENT : CMD_ORE_TAB);
+    }
+
+    /**
+     * 礦物倉庫畫面上的背包頁籤（沒有讀背包，不顯示頁名）
+     *
+     * @param page     第幾頁（0 起算，也是第幾個頁籤）
+     * @param bagPages 背包可用頁數
+     */
+    static ItemStack plainTab(int page, int bagPages) {
+        if (page >= bagPages) {
+            return ItemManage.createItem(Material.PAPER, "§8第 " + (page + 1) + " 頁（未開放）",
+                    List.of("§7升級 VIP 可以多開一頁（每頁 45 格）"), CMD_TAB_LOCKED);
+        }
+        return ItemManage.createItem(Material.PAPER, "§f第 " + (page + 1) + " 頁",
+                List.of("§e左鍵 §7回到背包這一頁"), CMD_TAB + page);
     }
 
     /**

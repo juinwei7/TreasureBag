@@ -9,3 +9,41 @@ MAX_SLOT:
   VIP2: 135
   VIP3: 180
   VIP4: 225
+
+#########################################
+#            礦物倉庫                     #
+#   背包裡的分頁（/bag ore），各分流共用     #
+#########################################
+
+ORE:
+  # 每人可存的總件數（所有物品加起來），/bag oreadmin space 可以個別調整
+  SPACE: 100000
+  # 清單最多幾種物品
+  MAX_KINDS: 135
+  # true：挖方塊掉的東西身上放不下才收進倉庫；false：清單裡有開自動收集的全部收
+  ONLY_WHEN_FULL: true
+  # 不能存的物品
+  BLACKLIST:
+    - BEDROCK
+  # 新玩家一開始的清單（自動收集開著）
+  DEFAULT_LIST:
+    - COAL_BLOCK
+    - LAPIS_BLOCK
+    - REDSTONE_BLOCK
+    - IRON_BLOCK
+    - GOLD_BLOCK
+    - DIAMOND_BLOCK
+    - EMERALD_BLOCK
+    - COAL
+    - REDSTONE
+    - IRON_ORE
+    - GOLD_ORE
+    - DIAMOND
+    - EMERALD
+    - LAPIS_LAZULI
+    - RAW_IRON
+    - RAW_COPPER
+    - RAW_GOLD
+    - RAW_IRON_BLOCK
+    - RAW_COPPER_BLOCK
+    - RAW_GOLD_BLOCK

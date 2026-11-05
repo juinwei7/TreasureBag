@@ -38,6 +38,8 @@ public final class BagTitle implements Listener {
     /** 往左 20 → 背景字 U+E0A0（前進 189）→ 往回 169，文字起點回到 x=8 */
     private static final String BACKGROUND = "";
     private static final String TITLE = "隨身背包";
+    /** 礦物倉庫分頁的標題（四個字都在標題字型裡） */
+    static final String ORE_TITLE = "礦物倉庫";
 
     /** 確定沒裝好材質包的玩家 */
     private static final Map<UUID, Boolean> MISSING = new ConcurrentHashMap<>();
@@ -62,10 +64,17 @@ public final class BagTitle implements Listener {
      * @param suffix 接在標題後面的文字（頁名、別人的名字），可為 null
      */
     static Component textured(String suffix) {
+        return textured(TITLE, suffix);
+    }
+
+    /**
+     * 有材質包的標題：背景＋固定標題（標題字型，字一定要在字型裡）＋附加文字（預設字型）
+     */
+    static Component textured(String fixedTitle, String suffix) {
         var title = Component.text()
                 // 一定要白色，不然點陣背景會被預設標題色染暗
                 .append(Component.text(BACKGROUND).color(NamedTextColor.WHITE))
-                .append(Component.text(TITLE).font(TITLE_FONT).color(TITLE_RGB));
+                .append(Component.text(fixedTitle).font(TITLE_FONT).color(TITLE_RGB));
         if (suffix != null && !suffix.isEmpty()) title.append(Component.text(" " + suffix).color(SUB_RGB));
         return title.build();
     }

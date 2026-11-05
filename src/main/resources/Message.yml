@@ -46,6 +46,27 @@ MESSAGE:
   BAG_LOG_HEADER: '§e{0} §f的背包存取紀錄 §7（第 {1} 頁，新的在上面）'
   BAG_LOG_EMPTY: '§7沒有紀錄'
   BAG_LOG_NEXT: '§e§l[下一頁]'
+  ORE_LOAD_FAILED: '§c礦物倉庫暫時讀不到，請稍後再試'
+  ORE_FULL: '§c礦物倉庫滿了（§f{0}§c/§f{1}§c 件）'
+  ORE_NO_ROOM: '§c身上放不下了，先騰出空間再取'
+  ORE_WITHDRAWN: '§a從礦物倉庫取出 §f{0} §a個'
+  ORE_DEPOSITED: '§a存進礦物倉庫 §f{0} §a個'
+  ORE_DEPOSIT_NONE: '§7身上沒有可以存進去的物品（一鍵存入不含快捷列）'
+  ORE_NOT_PLAIN: '§c改過名字、附魔、有損耗或自製的物品不能放進礦物倉庫'
+  ORE_FORBIDDEN: '§c這個物品不能放進礦物倉庫'
+  ORE_TOO_MANY_KINDS: '§c礦物倉庫最多 {0} 種物品，先把用不到的種類移除（數量是 0 時按 Q）'
+  ORE_REMOVED: '§7已從礦物倉庫清單移除'
+  ORE_NOT_EMPTY: '§c還有存量，全部取出後才能移除'
+  ORE_UNKNOWN_ITEM: '§c找不到物品 {0}（要用英文名稱，例如 RAW_IRON）'
+  ORE_ADMIN_ADDED: '§a已幫 §f{0} §a的礦物倉庫加入 §f{1} x{2}'
+  ORE_ADMIN_TAKEN: '§a已從 §f{0} §a的礦物倉庫扣除 §f{1} x{2}'
+  ORE_ADMIN_SPACE: '§a已把 §f{0} §a的礦物倉庫容量設為 §f{1} §a件'
+  ORE_ADMIN_USAGE:
+    - '§e/bag oreadmin add <玩家> <物品> <數量> §7補發'
+    - '§e/bag oreadmin take <玩家> <物品> <數量> §7扣除（不夠就扣光）'
+    - '§e/bag oreadmin space <玩家> <件數|default> §7個別容量'
+    - '§e/bag oreadmin import §7重跑這台的 ExtraStorage 匯入（主控台）'
+  ORE_IMPORT_RESULT: '§e{0}'
   DB_TYPE_CHANGED: '§e偵測到 DataBase.yml 的 type 已改為 §f{0}§e，資料庫設定需重啟伺服器才會生效（目前仍使用 §f{1}§e）'
 
 # 時間格式
@@ -64,6 +85,8 @@ COMMAND:
   FORCE: 強制開啟隨身背包
   NAME: 幫背包頁面取名字
   LOG: 查看玩家的背包存取紀錄
+  ORE: 打開礦物倉庫
+  ORE_ADMIN: 管理玩家的礦物倉庫
 
 ADMIN_MESSAGE:
   EDIT_DISABLED: '已停用'
@@ -73,6 +96,7 @@ MENU_TITLE:
   ADMIN_MENU: '&1隨身背包: %player%'
   VIEW_MENU: '§r       §r§9◆§3◆§9◆     §1§l隨身背包     §9◆§3◆§9◆'
   BAG_MENU: '§1§l隨身背包 §7- 第 {0}/{1} 頁'
+  ORE_MENU: '§1§l礦物倉庫'
 
 # 選單物品
 MENU_ITEM:

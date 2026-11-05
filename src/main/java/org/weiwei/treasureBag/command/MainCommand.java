@@ -16,6 +16,8 @@ import org.weiwei.treasureBag.command.sub.ForceCommand;
 import org.weiwei.treasureBag.command.sub.LogCommand;
 import org.weiwei.treasureBag.command.sub.NameCommand;
 import org.weiwei.treasureBag.command.sub.OpenCommand;
+import org.weiwei.treasureBag.command.sub.OreAdminCommand;
+import org.weiwei.treasureBag.command.sub.OreCommand;
 import org.weiwei.treasureBag.command.sub.ReloadCommand;
 import org.weiwei.treasureBag.command.sub.TradeCommand;
 import org.weiwei.treasureBag.service.PlayerBagService;
@@ -46,6 +48,8 @@ public class MainCommand implements CommandExecutor, TabCompleter {
         new ForceCommand().registerCommand();
         new NameCommand().registerCommand();
         new LogCommand().registerCommand();
+        new OreCommand().registerCommand();
+        new OreAdminCommand().registerCommand();
         new ReloadCommand().registerCommand();
 
         // TradeCommand 直接引用 Minepacks API，沒裝 Minepacks 的分流一載入就 NoClassDefFoundError，整個外掛啟用失敗

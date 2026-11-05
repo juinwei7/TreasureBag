@@ -794,6 +794,8 @@ public final class OreService {
     private static final class InventoryRoom {
         private final ItemStack[] contents;
         private final Map<Material, Integer> partial = new EnumMap<>(Material.class);
+        /** 有特殊資料的物品各自剩多少疊上去的空間（只能疊到一模一樣的物品上，用 isSimilar 找） */
+        private final List<Map.Entry<ItemStack, Integer>> special = new ArrayList<>();
         private int empty;
 
         InventoryRoom(PlayerInventory inventory) {
@@ -812,12 +814,14 @@ public final class OreService {
 
         /**
          * 放得下的件數（這部分照原版掉在地上讓玩家撿），同時扣掉用掉的空間
-         * 原版物品的「疊上去的空間」照種類記住；有特殊資料的每次重算（只能疊到一模一樣的物品上）
+         * 「疊上去的空間」用掉多少要記住：原版物品照種類記，有特殊資料的照物品本身記
          */
         int fit(ItemStack stack, int amount) {
             int max = stack.getMaxStackSize();
             boolean plain = isPlain(stack);
-            Integer space = plain ? partial.get(stack.getType()) : null;
+            Map.Entry<ItemStack, Integer> specialEntry = plain ? null
+                    : special.stream().filter(entry -> entry.getKey().isSimilar(stack)).findFirst().orElse(null);
+            Integer space = plain ? partial.get(stack.getType()) : specialEntry != null ? specialEntry.getValue() : null;
             if (space == null) {
                 space = 0;
                 for (ItemStack item : contents) {
@@ -829,7 +833,14 @@ public final class OreService {
             int slots = Math.min(empty, (rest + max - 1) / max);
             int fromEmpty = Math.min(rest, slots * max);
             empty -= slots;
-            if (plain) partial.put(stack.getType(), space - fromPartial + slots * max - fromEmpty);
+            int left = space - fromPartial + slots * max - fromEmpty;
+            if (plain) {
+                partial.put(stack.getType(), left);
+            } else if (specialEntry != null) {
+                specialEntry.setValue(left);
+            } else {
+                special.add(new java.util.AbstractMap.SimpleEntry<>(stack.clone(), left));
+            }
             return fromPartial + fromEmpty;
         }
     }

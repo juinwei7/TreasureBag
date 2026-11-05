@@ -19,8 +19,11 @@ import org.weiwei.treasureBag.service.OreService;
  */
 public class OreListener implements Listener {
 
-    /** 等其他外掛改完掉落物（例如加倍、換成自製物品）再收，取消掉的挖掘不收 */
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    /**
+     * MONITOR：其他外掛都改完掉落物（加倍、換成自製物品）、也確定沒被取消才收。
+     * 在更早的階段收的話，後面的外掛取消掉落時倉庫已經記了數量，等於憑空多出物品
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockDropItem(BlockDropItemEvent event) {
         OreService.collect(event);
     }

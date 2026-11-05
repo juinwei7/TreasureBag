@@ -171,6 +171,38 @@ public class OreRepository {
         }
     }
 
+    /**
+     * 增加數量，並在同一筆交易把 marker 記進 ore_import；marker 已經記過就什麼都不做並回傳 false
+     * （開機補寫暫存檔用：補寫成功但檔案改名失敗，下次開機也不會重複加）
+     */
+    public boolean addOnce(Change change, String server, String marker) {
+        try (Connection connection = connection()) {
+            try {
+                connection.setAutoCommit(false);
+                try (PreparedStatement mark = connection.prepareStatement(
+                        "INSERT INTO ore_import (source, players, created_at) VALUES (?, 1, ?)")) {
+                    mark.setString(1, marker);
+                    mark.setLong(2, System.currentTimeMillis());
+                    mark.executeUpdate();
+                } catch (SQLException duplicate) {
+                    connection.rollback();
+                    if (imported(connection, marker)) return false;
+                    throw duplicate;
+                }
+                for (Map.Entry<String, Long> entry : change.deltas().entrySet()) {
+                    increment(connection, change.owner(), entry.getKey(), entry.getValue(), change.autoForNew());
+                }
+                connection.commit();
+                return true;
+            } catch (SQLException e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("無法補寫礦物倉庫: " + marker, e);
+        }
+    }
+
     private void increment(Connection connection, UUID owner, String material, long delta, boolean autoForNew) throws SQLException {
         try (PreparedStatement update = connection.prepareStatement(
                 "UPDATE player_ore SET amount = amount + ? WHERE player_uuid = ? AND material = ?")) {

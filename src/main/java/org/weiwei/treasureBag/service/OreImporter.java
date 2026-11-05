@@ -76,7 +76,7 @@ public final class OreImporter {
 
             String server = BagStorage.serverName();
             String source = server + ":" + md5(file);
-            boolean done = new OreRepository().importPlayers(source, players, server);
+            boolean done = importWithRetry(source, players, server);
             if (!unknown.isEmpty()) writeUnknown(server, unknown);
 
             File imported = new File(file.getParentFile(), file.getName() + ".imported");
@@ -95,6 +95,21 @@ public final class OreImporter {
         } catch (Exception e) {
             BagStorage.logSevere("匯入 ExtraStorage 失敗，資料檔保留，下次啟動或 /bag oreadmin import 再試: " + file.getPath(), e);
             return "匯入失敗：" + e.getMessage();
+        }
+    }
+
+    /**
+     * 整份同一筆交易；玩家剛好在別台建立倉庫會撞主鍵、整筆退回，重讀再來（最多 3 次）
+     */
+    private static boolean importWithRetry(String source, List<OreRepository.Imported> players, String server) {
+        OreRepository repository = new OreRepository();
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return repository.importPlayers(source, players, server);
+            } catch (IllegalStateException e) {
+                if (attempt >= 3) throw e;
+                Main.getInst().getLogger().warning("匯入 ExtraStorage 第 " + attempt + " 次失敗，重試: " + e.getMessage());
+            }
         }
     }
 

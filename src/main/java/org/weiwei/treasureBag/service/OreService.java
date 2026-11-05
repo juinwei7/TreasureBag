@@ -94,6 +94,7 @@ public final class OreService {
      * 啟動（BagStorage.start 與舊資料匯入之後）：補寫上次沒存進去的、定時送出自動收集、幫在線玩家讀倉庫
      */
     public static void start() {
+        OreStorage.start();
         OreStorage.recoverFiles();
         flushTask = Bukkit.getScheduler().runTaskTimer(Main.getInst(), () -> {
             ACCOUNTS.values().forEach(OreService::flush);
@@ -141,6 +142,21 @@ public final class OreService {
      */
     public static void reloadOnline() {
         ACCOUNTS.values().forEach(OreService::refresh);
+    }
+
+    /**
+     * 主控台 /bag oreadmin import：背景匯入，完成後回主執行緒通知並重讀在線玩家
+     */
+    public static void importNow(CommandSender sender) {
+        CompletableFuture.supplyAsync(OreImporter::run).whenComplete((result, error) -> BagStorage.runSync(() -> {
+            if (error != null) {
+                BagStorage.logSevere("匯入 ExtraStorage 失敗", error);
+                Message.sendPrefix(sender, Message.MESSAGE__ERROR, "匯入失敗");
+                return;
+            }
+            Message.sendPrefix(sender, Message.MESSAGE__ORE_IMPORT_RESULT, result != null ? result : "沒有 ExtraStorage 資料檔");
+            reloadOnline();
+        }));
     }
 
     // ---------- 開畫面 ----------
@@ -261,20 +277,29 @@ public final class OreService {
         if (mode != GameMode.SURVIVAL && mode != GameMode.ADVENTURE) return;
         OreAccount account = ACCOUNTS.get(player.getUniqueId());
         if (account == null || !account.loaded || !account.enabled || event.getItems().isEmpty()) return;
+        // 大部分挖掘沒有要收的東西，先看一眼，沒有就不用算身上空間
+        if (event.getItems().stream().noneMatch(drop -> collectable(account, drop.getItemStack()))) return;
 
         InventoryRoom room = onlyWhenFull() ? new InventoryRoom(player.getInventory()) : null;
+        if (room != null) {
+            // 不收的東西照原版會被撿起來，先扣掉它們要佔的空間，不然會以為要收的放得下、結果留在地上
+            for (Item drop : event.getItems()) {
+                ItemStack stack = drop.getItemStack();
+                if (!collectable(account, stack)) room.fit(stack, stack.getAmount());
+            }
+        }
         long free = account.free();
         Map<Material, Long> stored = new EnumMap<>(Material.class);
         boolean full = false;
         for (Iterator<Item> iterator = event.getItems().iterator(); iterator.hasNext(); ) {
             Item drop = iterator.next();
             ItemStack stack = drop.getItemStack();
+            if (!collectable(account, stack)) continue;
             Material material = stack.getType();
             OreAccount.Entry entry = account.entries.get(material);
-            if (entry == null || !entry.auto || !isPlain(stack)) continue;
 
             int amount = stack.getAmount();
-            int overflow = room == null ? amount : amount - room.fit(material, amount);
+            int overflow = room == null ? amount : amount - room.fit(stack, amount);
             if (overflow <= 0) continue;
             int store = (int) Math.min(overflow, free);
             if (store <= 0) {
@@ -304,6 +329,14 @@ public final class OreService {
                         + "/" + String.format("%,d", account.space()) + "），挖到的東西會掉在地上", NamedTextColor.RED));
             }
         }
+    }
+
+    /**
+     * 這堆掉落物要不要收：清單裡有、開著自動收集、沒被列進黑名單、是原版物品
+     */
+    private static boolean collectable(OreAccount account, ItemStack stack) {
+        OreAccount.Entry entry = account.entries.get(stack.getType());
+        return entry != null && entry.auto && canStore(stack.getType()) && isPlain(stack);
     }
 
     private static Component storedBar(Map<Material, Long> stored) {
@@ -465,7 +498,7 @@ public final class OreService {
      */
     private static void depositKind(Player player, View view, Material material) {
         Map<Material, Long> moved = takeFromInventory(player, view.account, 0, 36,
-                item -> item.getType() == material && isPlain(item));
+                item -> item.getType() == material && canStore(material) && isPlain(item));
         finishDeposit(player, view, moved);
     }
 
@@ -751,14 +784,8 @@ public final class OreService {
      * 身上（不含裝備欄、副手）還放得下多少這種物品
      */
     private static int room(PlayerInventory inventory, Material material) {
-        int max = material.getMaxStackSize();
-        ItemStack plain = new ItemStack(material);
-        int room = 0;
-        for (ItemStack item : inventory.getStorageContents()) {
-            if (item == null || item.getType().isAir()) room += max;
-            else if (item.isSimilar(plain)) room += Math.max(0, max - item.getAmount());
-        }
-        return room;
+        InventoryRoom room = new InventoryRoom(inventory);
+        return room.fit(new ItemStack(material), room.capacity(material.getMaxStackSize()));
     }
 
     /**
@@ -777,16 +804,24 @@ public final class OreService {
         }
 
         /**
-         * 放得下的件數（這部分照原版掉在地上讓玩家撿）
+         * 整個身上最多放得下幾件（每格 max 件）
          */
-        int fit(Material material, int amount) {
-            int max = material.getMaxStackSize();
-            Integer space = partial.get(material);
+        int capacity(int max) {
+            return contents.length * max;
+        }
+
+        /**
+         * 放得下的件數（這部分照原版掉在地上讓玩家撿），同時扣掉用掉的空間
+         * 原版物品的「疊上去的空間」照種類記住；有特殊資料的每次重算（只能疊到一模一樣的物品上）
+         */
+        int fit(ItemStack stack, int amount) {
+            int max = stack.getMaxStackSize();
+            boolean plain = isPlain(stack);
+            Integer space = plain ? partial.get(stack.getType()) : null;
             if (space == null) {
                 space = 0;
-                ItemStack plain = new ItemStack(material);
                 for (ItemStack item : contents) {
-                    if (item != null && item.isSimilar(plain)) space += Math.max(0, max - item.getAmount());
+                    if (item != null && item.isSimilar(stack)) space += Math.max(0, max - item.getAmount());
                 }
             }
             int fromPartial = Math.min(space, amount);
@@ -794,7 +829,7 @@ public final class OreService {
             int slots = Math.min(empty, (rest + max - 1) / max);
             int fromEmpty = Math.min(rest, slots * max);
             empty -= slots;
-            partial.put(material, space - fromPartial + slots * max - fromEmpty);
+            if (plain) partial.put(stack.getType(), space - fromPartial + slots * max - fromEmpty);
             return fromPartial + fromEmpty;
         }
     }

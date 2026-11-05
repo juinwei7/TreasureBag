@@ -30,7 +30,11 @@ final class OreMenu {
     }
 
     static int maxPage(OreAccount account) {
-        return Math.max(1, (int) Math.ceil(account.visible().size() / (double) PAGE_SIZE));
+        return maxPage(account.visible().size());
+    }
+
+    private static int maxPage(int kinds) {
+        return Math.max(1, (int) Math.ceil(kinds / (double) PAGE_SIZE));
     }
 
     /**
@@ -45,9 +49,11 @@ final class OreMenu {
     static void fill(Inventory inventory, Player viewer, OreAccount account, int page, boolean readOnly) {
         for (int slot = 0; slot < inventory.getSize(); slot++) inventory.setItem(slot, null);
 
+        List<Material> visible = account.visible();
         for (int slot = 0; slot < PAGE_SIZE; slot++) {
-            Material material = materialAt(account, page, slot);
-            if (material == null) break;
+            int index = page * PAGE_SIZE + slot;
+            if (index >= visible.size()) break;
+            Material material = visible.get(index);
             inventory.setItem(slot, entry(material, account.entries.get(material), readOnly));
         }
 
@@ -60,8 +66,8 @@ final class OreMenu {
                 inventory.setItem(BagMenu.FIRST_TAB_SLOT + i, BagMenu.plainTab(i, bagPages));
             }
         }
-        inventory.setItem(ORE_TAB_SLOT, BagMenu.oreTab(true, page, maxPage(account)));
-        inventory.setItem(INFO_SLOT, info(account, readOnly));
+        inventory.setItem(ORE_TAB_SLOT, BagMenu.oreTab(true, page, maxPage(visible.size())));
+        inventory.setItem(INFO_SLOT, info(account, visible.size(), readOnly));
     }
 
     static Component title(Player viewer, String ownerName, boolean isOwner) {
@@ -103,12 +109,12 @@ final class OreMenu {
                 : ItemManage.createItem(Material.GRAY_DYE, "§7自動收集：關", lore, CMD_BUTTON);
     }
 
-    private static ItemStack info(OreAccount account, boolean readOnly) {
+    private static ItemStack info(OreAccount account, int kinds, boolean readOnly) {
         long total = account.total();
         long space = account.space();
         List<String> lore = new ArrayList<>();
         lore.add("§7已存 §f" + String.format("%,d", total) + "§7/§f" + String.format("%,d", space) + " 件");
-        lore.add("§7種類 §f" + account.visible().size());
+        lore.add("§7種類 §f" + kinds);
         lore.add("§7自動收集 " + (account.enabled ? "§a開" : "§8關"));
         lore.add("");
         lore.add("§7點身上的物品就能把它加進清單");

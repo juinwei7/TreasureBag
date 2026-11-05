@@ -4,9 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.weiwei.treasureBag.Main;
 import org.weiwei.treasureBag.command.SubCommand;
-import org.weiwei.treasureBag.service.OreImporter;
 import org.weiwei.treasureBag.service.OreService;
 import org.weiwei.treasureBag.util.Message;
 
@@ -53,13 +51,7 @@ public class OreAdminCommand extends SubCommand {
             Message.send(sender, Message.MESSAGE__CONSOLE_ONLY);
             return;
         }
-        Bukkit.getScheduler().runTaskAsynchronously(Main.getInst(), () -> {
-            String result = OreImporter.run();
-            Bukkit.getScheduler().runTask(Main.getInst(), () -> {
-                Message.sendPrefix(sender, Message.MESSAGE__ORE_IMPORT_RESULT, result != null ? result : "沒有 ExtraStorage 資料檔");
-                OreService.reloadOnline();
-            });
-        });
+        OreService.importNow(sender);
     }
 
     private void changeAmount(CommandSender sender, String action, String[] args) {

@@ -113,10 +113,20 @@ final class OreMenu {
         long total = account.total();
         long space = account.space();
         List<String> lore = new ArrayList<>();
-        lore.add("§7已存 §f" + String.format("%,d", total) + "§7/§f" + String.format("%,d", space) + " 件");
+        if (account.spaceKnown()) {
+            lore.add("§7已存 §f" + String.format("%,d", total) + "§7/§f" + String.format("%,d", space) + " 件");
+            if (total > space) {
+                lore.add("§c超過容量：只能取出");
+                lore.add("§c取到 " + String.format("%,d", space) + " 件以下才能再存");
+            }
+        } else {
+            lore.add("§7已存 §f" + String.format("%,d", total) + " 件");
+            lore.add("§7容量看對方的 VIP 階級");
+        }
         lore.add("§7種類 §f" + kinds);
         lore.add("§7自動收集 " + (account.enabled ? "§a開" : "§8關"));
         lore.add("");
+        lore.add("§7容量看 VIP 階級，升級可以放更多");
         lore.add("§7點身上的物品就能把它加進清單");
         lore.add("§7每個分流都能存取同一個倉庫");
         if (readOnly) lore.add("§e唯讀模式");

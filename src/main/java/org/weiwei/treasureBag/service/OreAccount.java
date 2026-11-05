@@ -44,8 +44,10 @@ final class OreAccount {
 
     boolean loaded;
     boolean enabled = true;
-    /** 個別容量；null 用預設 */
+    /** 管理員個別設定的容量；null 照 VIP 階級 */
     Long space;
+    /** 照 VIP 階級的容量；-1 表示不知道（管理員看不在這台的玩家） */
+    long tierSpace = -1;
     /** 取出還在跑，先不接受下一次 */
     boolean withdrawing;
     long lastFullNotice;
@@ -55,7 +57,12 @@ final class OreAccount {
     }
 
     long space() {
-        return space != null ? space : OreService.defaultSpace();
+        return space != null ? space : Math.max(0, tierSpace);
+    }
+
+    /** 知不知道容量（看不在這台的玩家時不知道他的 VIP 階級） */
+    boolean spaceKnown() {
+        return space != null || tierSpace >= 0;
     }
 
     long total() {

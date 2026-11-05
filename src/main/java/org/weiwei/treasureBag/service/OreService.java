@@ -39,7 +39,8 @@ import java.util.function.Predicate;
  * 礦物倉庫（主執行緒）：挖方塊自動收集、介面上的存取、管理員調整
  * <p>
  * 從 ExtraStorage 搬過來，資料改放背包的中央資料庫，每個分流共用同一個倉庫。
- * 算的是件數不是格子：每人預設 {@link #DEFAULT_SPACE} 件（Config.yml ORE.SPACE，/bag oreadmin space 個別調整）。
+ * 算的是件數不是格子：容量照 VIP 階級（跟背包同一組權限 treasure-bag.<階級>，見 {@link #DEFAULT_SPACE}、Config.yml ORE.SPACE），
+ * /bag oreadmin space 個別設定優先。存量超過容量的只能取出，取到容量以下才能再存（自動收集也停）。
  * 只收沒有任何特殊資料的原版物品（改名、附魔、損耗、自製物品都不收），避免自製物品存進去、拿出來變成原版的。
  * <p>
  * 數量的正確性靠資料庫的加減（見 {@link OreRepository}），這台的 {@link OreAccount} 只是畫面與容量判斷用的快取；
@@ -50,7 +51,9 @@ public final class OreService {
     private static final long FLUSH_PERIOD_TICKS = 20L * 5;
     private static final long FULL_NOTICE_MS = 30_000;
     private static final long ACTION_COOLDOWN_MS = 200;
-    private static final long DEFAULT_SPACE = 100_000;
+    /** Config.yml 沒寫 ORE.SPACE 時的容量（件數），鍵是背包權限 treasure-bag.<鍵>，玩家有好幾個取最大 */
+    private static final Map<String, Long> DEFAULT_SPACE = Map.of(
+            "DEFAULT", 1_000L, "VIP", 2_000L, "VIP2", 4_000L, "VIP3", 8_000L, "VIP4", 16_000L);
     private static final int DEFAULT_MAX_KINDS = 135;
     /** Config.yml 沒寫 ORE.DEFAULT_LIST 時新玩家的清單：沿用 ExtraStorage 的白名單，補上青金石 */
     private static final List<String> DEFAULT_LIST = List.of(
@@ -125,6 +128,7 @@ public final class OreService {
 
     public static void join(Player player) {
         OreAccount account = new OreAccount(player.getUniqueId());
+        account.tierSpace = tierSpace(player);
         ACCOUNTS.put(player.getUniqueId(), account);
         refresh(account);
     }
@@ -164,6 +168,8 @@ public final class OreService {
     public static void open(Player player) {
         UUID id = player.getUniqueId();
         OreAccount account = ACCOUNTS.computeIfAbsent(id, OreAccount::new);
+        // 每次打開重算一次，升級 VIP 不用重登
+        account.tierSpace = tierSpace(player);
         whenLoaded(account, ok -> {
             Player now = Bukkit.getPlayer(id);
             if (now == null) return;
@@ -279,6 +285,7 @@ public final class OreService {
         if (account == null || !account.loaded || !account.enabled || event.getItems().isEmpty()) return;
         // 大部分挖掘沒有要收的東西，先看一眼，沒有就不用算身上空間
         if (event.getItems().stream().noneMatch(drop -> collectable(account, drop.getItemStack()))) return;
+        account.tierSpace = tierSpace(player);
 
         InventoryRoom room = onlyWhenFull() ? new InventoryRoom(player.getInventory()) : null;
         if (room != null) {
@@ -709,8 +716,11 @@ public final class OreService {
                     account.space = space;
                     refreshViews(account);
                 }
-                Message.sendPrefix(sender, Message.MESSAGE__ORE_ADMIN_SPACE, target.name(),
-                        space == null ? "預設 " + String.format("%,d", defaultSpace()) : String.format("%,d", space));
+                if (space == null) {
+                    Message.sendPrefix(sender, Message.MESSAGE__ORE_ADMIN_SPACE_DEFAULT, target.name());
+                } else {
+                    Message.sendPrefix(sender, Message.MESSAGE__ORE_ADMIN_SPACE, target.name(), String.format("%,d", space));
+                }
             }));
         }));
     }
@@ -744,8 +754,25 @@ public final class OreService {
 
     // ---------- 設定與工具 ----------
 
-    static long defaultSpace() {
-        return ConfigManager.getConfig() != null ? ConfigManager.getConfig().getLong("ORE.SPACE", DEFAULT_SPACE) : DEFAULT_SPACE;
+    /**
+     * 玩家照權限能放幾件：Config.yml ORE.SPACE 的每個鍵對應 treasure-bag.<鍵>，有好幾個取最大，一個都沒有是 0
+     */
+    static long tierSpace(Player player) {
+        long best = 0;
+        for (Map.Entry<String, Long> entry : spaceTable().entrySet()) {
+            if (player.hasPermission("treasure-bag." + entry.getKey())) best = Math.max(best, entry.getValue());
+        }
+        return best;
+    }
+
+    private static Map<String, Long> spaceTable() {
+        var config = ConfigManager.getConfig();
+        if (config == null || !config.isConfigurationSection("ORE.SPACE")) return DEFAULT_SPACE;
+        Map<String, Long> table = new HashMap<>();
+        for (String key : config.getConfigurationSection("ORE.SPACE").getKeys(false)) {
+            table.put(key, config.getLong("ORE.SPACE." + key));
+        }
+        return table.isEmpty() ? DEFAULT_SPACE : table;
     }
 
     private static int maxKinds() {

@@ -398,7 +398,8 @@ public class PlayerBagService {
     }
 
     /**
-     * shift 點身上的物品：先疊到背包裡同種的堆，再放空格
+     * shift 點身上的物品：只放進目前這一頁，先疊到這頁同種的堆，再放這頁的空格
+     * 跟原版箱子一樣，這頁放滿了就留在身上，不會跑到看不到的其他頁
      *
      * @return 實際移入的數量
      */
@@ -407,21 +408,31 @@ public class PlayerBagService {
         if (session == null || session.readOnly() || gui == null || source == null || source.getType().isAir()) return 0;
 
         savePage(session, gui);
-        int moved = insert(session, source);
+        int start = gui.getPage() * PAGE_CONTENT_SIZE;
+        int moved = insert(session, source, start, Math.min(start + PAGE_CONTENT_SIZE, session.maxSlot()));
         BagMenu.fillContent(gui.getInventory(), session);
         return moved;
     }
 
     /**
-     * 把物品放進 session：先疊到同種的堆，再放空格（跳過讀不出來的格位）
+     * 把物品放進 session 的所有格位
      *
      * @return 實際放入的數量（source 本身不會被改動）
      */
     private static int insert(BagSession session, ItemStack source) {
+        return insert(session, source, 0, session.maxSlot());
+    }
+
+    /**
+     * 把物品放進 session 的 [start, end) 格位：先疊到同種的堆，再放空格（跳過讀不出來的格位）
+     *
+     * @return 實際放入的數量（source 本身不會被改動）
+     */
+    private static int insert(BagSession session, ItemStack source, int start, int end) {
         int originalAmount = source.getAmount();
         ItemStack moving = source.clone();
 
-        for (int slot = 0; slot < session.maxSlot() && moving.getAmount() > 0; slot++) {
+        for (int slot = start; slot < end && moving.getAmount() > 0; slot++) {
             ItemStack existing = session.items().get(slot);
             if (existing == null || existing.getType().isAir() || !existing.isSimilar(moving)) continue;
 
@@ -432,7 +443,7 @@ public class PlayerBagService {
             moving.setAmount(moving.getAmount() - moveAmount);
         }
 
-        for (int slot = 0; slot < session.maxSlot() && moving.getAmount() > 0; slot++) {
+        for (int slot = start; slot < end && moving.getAmount() > 0; slot++) {
             if (session.brokenSlots().contains(slot)) continue;
             ItemStack existing = session.items().get(slot);
             if (existing != null && !existing.getType().isAir()) continue;

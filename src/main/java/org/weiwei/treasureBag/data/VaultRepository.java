@@ -16,18 +16,37 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 礦物倉庫的資料庫存取（player_ore、player_ore_setting、ore_import），兩種資料庫通用的 SQL
+ * 倉庫的資料庫存取，兩種資料庫通用的 SQL：礦物倉庫（player_ore、player_ore_setting）、
+ * 副本素材倉庫（player_material、player_material_setting），兩種倉庫共用 ore_import（匯入與補寫的記號）
  * <p>
  * 數量只用 {@code amount = amount + ?} 增減、取出用 {@code amount >= ?} 條件扣，
  * 同一位玩家在不同分流同時寫入也不會互相覆蓋或多扣。連線不可用一律拋例外，呼叫端靠它決定重試。
+ * 兩種倉庫的欄位一樣，material 欄放物品的鍵（原版材質名稱或 MythicMobs 物品代號）。
  */
-public class OreRepository {
+public class VaultRepository {
 
-    /** 管理員、取出、存入時寫進 player_bag_log 的來源 */
-    public static final String SOURCE_DEPOSIT = "ore";
-    public static final String SOURCE_RETURN = "ore_return";
-    public static final String SOURCE_ADMIN = "ore_admin";
+    /** ExtraStorage 舊資料匯入時寫進 player_bag_log 的來源（只有礦物倉庫） */
     public static final String SOURCE_IMPORT = "ore_import";
+
+    public static final VaultRepository ORE = new VaultRepository("player_ore", "player_ore_setting", "ore");
+    public static final VaultRepository MATERIAL = new VaultRepository("player_material", "player_material_setting", "material");
+
+    private final String table;
+    private final String settingTable;
+    /** 存入、取出時寫進 player_bag_log 的來源（ore、material） */
+    public final String sourceDeposit;
+    /** 取出的東西放不下、退回倉庫 */
+    public final String sourceReturn;
+    /** 管理員補發、扣除 */
+    public final String sourceAdmin;
+
+    private VaultRepository(String table, String settingTable, String source) {
+        this.table = table;
+        this.settingTable = settingTable;
+        this.sourceDeposit = source;
+        this.sourceReturn = source + "_return";
+        this.sourceAdmin = source + "_admin";
+    }
 
     /**
      * 倉庫裡的一種物品
@@ -74,10 +93,10 @@ public class OreRepository {
             if (createDefaults(connection, owner, defaults)) return read(connection, owner);
             // 別台剛好同時建好了
             Account retry = read(connection, owner);
-            if (retry == null) throw new IllegalStateException("無法建立礦物倉庫: " + owner);
+            if (retry == null) throw new IllegalStateException("無法建立倉庫 " + table + ": " + owner);
             return retry;
         } catch (SQLException e) {
-            throw new IllegalStateException("無法讀取礦物倉庫: " + owner, e);
+            throw new IllegalStateException("無法讀取倉庫 " + table + ": " + owner, e);
         }
     }
 
@@ -85,7 +104,7 @@ public class OreRepository {
         boolean enabled;
         Long space;
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT enabled, space FROM player_ore_setting WHERE player_uuid = ?")) {
+                "SELECT enabled, space FROM " + settingTable + " WHERE player_uuid = ?")) {
             statement.setString(1, owner.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (!resultSet.next()) return null;
@@ -97,7 +116,7 @@ public class OreRepository {
 
         List<Row> rows = new ArrayList<>();
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT material, amount, auto_collect FROM player_ore WHERE player_uuid = ?")) {
+                "SELECT material, amount, auto_collect FROM " + table + " WHERE player_uuid = ?")) {
             statement.setString(1, owner.toString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
@@ -115,7 +134,7 @@ public class OreRepository {
         try {
             connection.setAutoCommit(false);
             try (PreparedStatement insert = connection.prepareStatement(
-                    "INSERT INTO player_ore_setting (player_uuid, enabled, space) VALUES (?, 1, NULL)")) {
+                    "INSERT INTO " + settingTable + " (player_uuid, enabled, space) VALUES (?, 1, NULL)")) {
                 insert.setString(1, owner.toString());
                 insert.executeUpdate();
             } catch (SQLException duplicate) {
@@ -125,7 +144,7 @@ public class OreRepository {
 
             Set<String> existing = materials(connection, owner);
             try (PreparedStatement insert = connection.prepareStatement(
-                    "INSERT INTO player_ore (player_uuid, material, amount, auto_collect) VALUES (?, ?, 0, 1)")) {
+                    "INSERT INTO " + table + " (player_uuid, material, amount, auto_collect) VALUES (?, ?, 0, 1)")) {
                 boolean any = false;
                 for (String material : defaults) {
                     if (existing.contains(material)) continue;
@@ -167,7 +186,7 @@ public class OreRepository {
                 throw e;
             }
         } catch (SQLException e) {
-            throw new IllegalStateException("無法寫入礦物倉庫: " + change.owner(), e);
+            throw new IllegalStateException("無法寫入倉庫 " + table + ": " + change.owner(), e);
         }
     }
 
@@ -199,13 +218,13 @@ public class OreRepository {
                 throw e;
             }
         } catch (SQLException e) {
-            throw new IllegalStateException("無法補寫礦物倉庫: " + marker, e);
+            throw new IllegalStateException("無法補寫倉庫 " + table + ": " + marker, e);
         }
     }
 
     private void increment(Connection connection, UUID owner, String material, long delta, boolean autoForNew) throws SQLException {
         try (PreparedStatement update = connection.prepareStatement(
-                "UPDATE player_ore SET amount = amount + ? WHERE player_uuid = ? AND material = ?")) {
+                "UPDATE " + table + " SET amount = amount + ? WHERE player_uuid = ? AND material = ?")) {
             update.setLong(1, delta);
             update.setString(2, owner.toString());
             update.setString(3, material);
@@ -213,7 +232,7 @@ public class OreRepository {
         }
         // 別台同時建立同一列會撞主鍵，整筆交易失敗後由呼叫端重試，重試時就會走上面的 UPDATE
         try (PreparedStatement insert = connection.prepareStatement(
-                "INSERT INTO player_ore (player_uuid, material, amount, auto_collect) VALUES (?, ?, ?, ?)")) {
+                "INSERT INTO " + table + " (player_uuid, material, amount, auto_collect) VALUES (?, ?, ?, ?)")) {
             insert.setString(1, owner.toString());
             insert.setString(2, material);
             insert.setLong(3, Math.max(0, delta));
@@ -235,7 +254,7 @@ public class OreRepository {
 
                 connection.setAutoCommit(false);
                 try (PreparedStatement update = connection.prepareStatement(
-                        "UPDATE player_ore SET amount = amount - ? WHERE player_uuid = ? AND material = ? AND amount >= ?")) {
+                        "UPDATE " + table + " SET amount = amount - ? WHERE player_uuid = ? AND material = ? AND amount >= ?")) {
                     update.setLong(1, take);
                     update.setString(2, owner.toString());
                     update.setString(3, material);
@@ -255,7 +274,7 @@ public class OreRepository {
             }
             return 0;
         } catch (SQLException e) {
-            throw new IllegalStateException("無法從礦物倉庫取出: " + owner + " " + material, e);
+            throw new IllegalStateException("無法從倉庫取出 " + table + ": " + owner + " " + material, e);
         }
     }
 
@@ -265,21 +284,21 @@ public class OreRepository {
     public void setAutoCollect(UUID owner, String material, boolean auto) {
         try (Connection connection = connection()) {
             try (PreparedStatement update = connection.prepareStatement(
-                    "UPDATE player_ore SET auto_collect = ? WHERE player_uuid = ? AND material = ?")) {
+                    "UPDATE " + table + " SET auto_collect = ? WHERE player_uuid = ? AND material = ?")) {
                 update.setInt(1, auto ? 1 : 0);
                 update.setString(2, owner.toString());
                 update.setString(3, material);
                 if (update.executeUpdate() > 0) return;
             }
             try (PreparedStatement insert = connection.prepareStatement(
-                    "INSERT INTO player_ore (player_uuid, material, amount, auto_collect) VALUES (?, ?, 0, ?)")) {
+                    "INSERT INTO " + table + " (player_uuid, material, amount, auto_collect) VALUES (?, ?, 0, ?)")) {
                 insert.setString(1, owner.toString());
                 insert.setString(2, material);
                 insert.setInt(3, auto ? 1 : 0);
                 insert.executeUpdate();
             }
         } catch (SQLException e) {
-            throw new IllegalStateException("無法更新礦物倉庫自動收集: " + owner + " " + material, e);
+            throw new IllegalStateException("無法更新倉庫自動收集 " + table + ": " + owner + " " + material, e);
         }
     }
 
@@ -289,12 +308,12 @@ public class OreRepository {
     public boolean removeEmpty(UUID owner, String material) {
         try (Connection connection = connection();
              PreparedStatement delete = connection.prepareStatement(
-                     "DELETE FROM player_ore WHERE player_uuid = ? AND material = ? AND amount = 0")) {
+                     "DELETE FROM " + table + " WHERE player_uuid = ? AND material = ? AND amount = 0")) {
             delete.setString(1, owner.toString());
             delete.setString(2, material);
             return delete.executeUpdate() > 0;
         } catch (SQLException e) {
-            throw new IllegalStateException("無法移除礦物倉庫物品: " + owner + " " + material, e);
+            throw new IllegalStateException("無法移除倉庫物品 " + table + ": " + owner + " " + material, e);
         }
     }
 
@@ -302,13 +321,13 @@ public class OreRepository {
         try (Connection connection = connection()) {
             ensureSetting(connection, owner);
             try (PreparedStatement update = connection.prepareStatement(
-                    "UPDATE player_ore_setting SET enabled = ? WHERE player_uuid = ?")) {
+                    "UPDATE " + settingTable + " SET enabled = ? WHERE player_uuid = ?")) {
                 update.setInt(1, enabled ? 1 : 0);
                 update.setString(2, owner.toString());
                 update.executeUpdate();
             }
         } catch (SQLException e) {
-            throw new IllegalStateException("無法更新礦物倉庫開關: " + owner, e);
+            throw new IllegalStateException("無法更新倉庫開關 " + table + ": " + owner, e);
         }
     }
 
@@ -319,14 +338,14 @@ public class OreRepository {
         try (Connection connection = connection()) {
             ensureSetting(connection, owner);
             try (PreparedStatement update = connection.prepareStatement(
-                    "UPDATE player_ore_setting SET space = ? WHERE player_uuid = ?")) {
+                    "UPDATE " + settingTable + " SET space = ? WHERE player_uuid = ?")) {
                 if (space == null) update.setNull(1, Types.BIGINT);
                 else update.setLong(1, space);
                 update.setString(2, owner.toString());
                 update.executeUpdate();
             }
         } catch (SQLException e) {
-            throw new IllegalStateException("無法更新礦物倉庫容量: " + owner, e);
+            throw new IllegalStateException("無法更新倉庫容量 " + table + ": " + owner, e);
         }
     }
 
@@ -369,7 +388,7 @@ public class OreRepository {
         Long space = null;
         boolean hasSetting = false;
         try (PreparedStatement select = connection.prepareStatement(
-                "SELECT enabled, space FROM player_ore_setting WHERE player_uuid = ?")) {
+                "SELECT enabled, space FROM " + settingTable + " WHERE player_uuid = ?")) {
             select.setString(1, uuid);
             try (ResultSet resultSet = select.executeQuery()) {
                 if (resultSet.next()) {
@@ -386,8 +405,8 @@ public class OreRepository {
         Long mergedSpace = space == null ? player.space()
                 : player.space() == null ? space : Long.valueOf(Math.min(space, player.space()));
         try (PreparedStatement statement = connection.prepareStatement(hasSetting
-                ? "UPDATE player_ore_setting SET enabled = ?, space = ? WHERE player_uuid = ?"
-                : "INSERT INTO player_ore_setting (enabled, space, player_uuid) VALUES (?, ?, ?)")) {
+                ? "UPDATE " + settingTable + " SET enabled = ?, space = ? WHERE player_uuid = ?"
+                : "INSERT INTO " + settingTable + " (enabled, space, player_uuid) VALUES (?, ?, ?)")) {
             statement.setInt(1, mergedEnabled ? 1 : 0);
             if (mergedSpace == null) statement.setNull(2, Types.BIGINT);
             else statement.setLong(2, mergedSpace);
@@ -397,10 +416,10 @@ public class OreRepository {
 
         Set<String> existing = materials(connection, player.owner());
         try (PreparedStatement update = connection.prepareStatement(
-                "UPDATE player_ore SET amount = amount + ?, auto_collect = CASE WHEN ? = 1 THEN 1 ELSE auto_collect END"
+                "UPDATE " + table + " SET amount = amount + ?, auto_collect = CASE WHEN ? = 1 THEN 1 ELSE auto_collect END"
                         + " WHERE player_uuid = ? AND material = ?");
              PreparedStatement insert = connection.prepareStatement(
-                     "INSERT INTO player_ore (player_uuid, material, amount, auto_collect) VALUES (?, ?, ?, ?)")) {
+                     "INSERT INTO " + table + " (player_uuid, material, amount, auto_collect) VALUES (?, ?, ?, ?)")) {
             boolean hasUpdate = false, hasInsert = false;
             for (Map.Entry<String, Long> entry : player.amounts().entrySet()) {
                 int auto = player.auto().contains(entry.getKey()) ? 1 : 0;
@@ -442,14 +461,14 @@ public class OreRepository {
 
     private void ensureSetting(Connection connection, UUID owner) throws SQLException {
         try (PreparedStatement select = connection.prepareStatement(
-                "SELECT 1 FROM player_ore_setting WHERE player_uuid = ?")) {
+                "SELECT 1 FROM " + settingTable + " WHERE player_uuid = ?")) {
             select.setString(1, owner.toString());
             try (ResultSet resultSet = select.executeQuery()) {
                 if (resultSet.next()) return;
             }
         }
         try (PreparedStatement insert = connection.prepareStatement(
-                "INSERT INTO player_ore_setting (player_uuid, enabled, space) VALUES (?, 1, NULL)")) {
+                "INSERT INTO " + settingTable + " (player_uuid, enabled, space) VALUES (?, 1, NULL)")) {
             insert.setString(1, owner.toString());
             insert.executeUpdate();
         } catch (SQLException duplicate) {
@@ -460,7 +479,7 @@ public class OreRepository {
     private Set<String> materials(Connection connection, UUID owner) throws SQLException {
         Set<String> materials = new HashSet<>();
         try (PreparedStatement select = connection.prepareStatement(
-                "SELECT material FROM player_ore WHERE player_uuid = ?")) {
+                "SELECT material FROM " + table + " WHERE player_uuid = ?")) {
             select.setString(1, owner.toString());
             try (ResultSet resultSet = select.executeQuery()) {
                 while (resultSet.next()) materials.add(resultSet.getString(1));
@@ -471,7 +490,7 @@ public class OreRepository {
 
     private long amount(Connection connection, UUID owner, String material) throws SQLException {
         try (PreparedStatement select = connection.prepareStatement(
-                "SELECT amount FROM player_ore WHERE player_uuid = ? AND material = ?")) {
+                "SELECT amount FROM " + table + " WHERE player_uuid = ? AND material = ?")) {
             select.setString(1, owner.toString());
             select.setString(2, material);
             try (ResultSet resultSet = select.executeQuery()) {

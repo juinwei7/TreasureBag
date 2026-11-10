@@ -16,7 +16,6 @@ import org.weiwei.treasureBag.customGui.CustomGui;
 import org.weiwei.treasureBag.customGui.GuiType;
 import org.weiwei.treasureBag.data.BagChanges;
 import org.weiwei.treasureBag.data.BagLog;
-import org.weiwei.treasureBag.data.OreRepository;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.ItemManage;
 import org.weiwei.treasureBag.util.Message;
@@ -295,7 +294,7 @@ public class PlayerBagService {
 
         Inventory inventory = gui.getInventory();
         BagMenu.fillContent(inventory, session);
-        BagMenu.fillControlRow(inventory, session, !session.readOnly(), isOwner);
+        BagMenu.fillControlRow(inventory, player, session, !session.readOnly(), isOwner);
         player.openInventory(inventory);
     }
 
@@ -328,10 +327,11 @@ public class PlayerBagService {
         BagSession session = getSession(player);
         if (session == null) return;
 
-        if (rawSlot == BagMenu.ORE_TAB_SLOT) {
+        for (VaultKind kind : VaultKind.ALL) {
+            if (rawSlot != kind.tabSlot) continue;
             // 打開倉庫畫面時背包會被關掉，照一般關閉流程存檔；不在點擊事件裡換畫面，排到下一個 tick
             if (!session.readOnly() && player.getUniqueId().equals(session.ownerUuid())) {
-                Bukkit.getScheduler().runTask(Main.getInst(), () -> OreService.open(player));
+                VaultService.of(kind).openFromTab(player);
             }
             return;
         }
@@ -485,7 +485,7 @@ public class PlayerBagService {
         }
 
         BagMenu.fillContent(gui.getInventory(), session);
-        BagMenu.fillControlRow(gui.getInventory(), session, true, player.getUniqueId().equals(session.ownerUuid()));
+        BagMenu.fillControlRow(gui.getInventory(), player, session, true, player.getUniqueId().equals(session.ownerUuid()));
         player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.6f, 1.2f);
     }
 
@@ -533,7 +533,7 @@ public class PlayerBagService {
         }
 
         BagMenu.fillContent(gui.getInventory(), session);
-        BagMenu.fillControlRow(gui.getInventory(), session, true, player.getUniqueId().equals(session.ownerUuid()));
+        BagMenu.fillControlRow(gui.getInventory(), player, session, true, player.getUniqueId().equals(session.ownerUuid()));
         if (moved > 0) {
             player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.6f, 1.0f);
             Message.sendPrefix(player, Message.MESSAGE__BAG_DEPOSITED, moved);
@@ -663,14 +663,8 @@ public class PlayerBagService {
             line.append(" §8（").append(log.viewerName()).append(" 操作）");
         }
         if (BagChanges.SOURCE_FORCE.equals(log.source())) line.append(" §8（強制開啟掉落）");
-        if (log.source() != null && log.source().startsWith("ore")) {
-            line.append(switch (log.source()) {
-                case OreRepository.SOURCE_ADMIN -> " §8（礦物倉庫・管理員）";
-                case OreRepository.SOURCE_IMPORT -> " §8（礦物倉庫・舊資料匯入）";
-                case OreRepository.SOURCE_RETURN -> " §8（礦物倉庫・放不下退回）";
-                default -> " §8（礦物倉庫）";
-            });
-        }
+        String vault = VaultKind.logLabel(log.source());
+        if (vault != null) line.append(" §8（").append(vault).append("）");
         return line.toString();
     }
 

@@ -14,7 +14,8 @@ import java.util.List;
 /**
  * 背包介面的畫面：標題、內容區、底部控制列
  * <p>
- * 控制列（第 46～54 格）：45 整理、46 一鍵存入、47～51 頁籤、52 礦物倉庫分頁（只有主人自己開時有）、53 資訊。
+ * 控制列（第 46～54 格）：45 整理、46 一鍵存入、47～51 頁籤、52 礦物倉庫分頁、53 副本素材分頁（兩個倉庫只有主人自己開時有）。
+ * 已用格數寫在目前這一頁的頁籤說明裡（原本 53 是資訊書，讓給副本素材）。
  * 按鈕用原版物品＋CustomModelData，沒裝材質包的玩家也看得懂是什麼。
  * 頁籤圖示只有 1～5，背包超過 5 頁時頁籤會跟著目前頁滑動，名稱寫的仍是真正頁碼。
  */
@@ -26,15 +27,13 @@ final class BagMenu {
     static final int FIRST_TAB_SLOT = 47;
     static final int TAB_COUNT = 5;
     static final int ORE_TAB_SLOT = 52;
-    static final int INFO_SLOT = 53;
+    static final int MATERIAL_TAB_SLOT = 53;
 
     private static final int CMD_BUTTON = 870;
     private static final int CMD_TAB = 870;
     private static final int CMD_TAB_CURRENT = 875;
     private static final int CMD_TAB_LOCKED = 880;
     private static final int CMD_LOCKED_SLOT = 870;
-    private static final int CMD_ORE_TAB = 881;
-    private static final int CMD_ORE_TAB_CURRENT = 882;
 
     private BagMenu() {
     }
@@ -63,9 +62,9 @@ final class BagMenu {
      * 填入底部控制列
      *
      * @param canEdit 觀看者能不能改內容（唯讀時不放整理、存入）
-     * @param isOwner 觀看者是不是背包主人（只有主人能幫頁面取名字）
+     * @param isOwner 觀看者是不是背包主人（只有主人能幫頁面取名字、開倉庫分頁）
      */
-    static void fillControlRow(Inventory inventory, BagSession session, boolean canEdit, boolean isOwner) {
+    static void fillControlRow(Inventory inventory, Player viewer, BagSession session, boolean canEdit, boolean isOwner) {
         for (int slot = PAGE_CONTENT_SIZE; slot < inventory.getSize(); slot++) {
             inventory.setItem(slot, null);
         }
@@ -80,36 +79,16 @@ final class BagMenu {
         int maxPage = maxPage(session.maxSlot());
         int start = firstTabPage(session.page(), maxPage);
         for (int i = 0; i < TAB_COUNT; i++) {
-            inventory.setItem(FIRST_TAB_SLOT + i, tab(session, start + i, i, maxPage, isOwner && canEdit));
+            inventory.setItem(FIRST_TAB_SLOT + i, tab(session, start + i, i, maxPage, isOwner && canEdit, canEdit));
         }
 
-        if (isOwner && canEdit) inventory.setItem(ORE_TAB_SLOT, oreTab(false, 0, 1));
-        inventory.setItem(INFO_SLOT, info(session, maxPage, canEdit));
+        if (isOwner && canEdit) {
+            for (VaultKind kind : VaultKind.ALL) inventory.setItem(kind.tabSlot, VaultMenu.tab(kind, viewer));
+        }
     }
 
     /**
-     * 礦物倉庫分頁
-     *
-     * @param current 目前就在礦物倉庫（點了翻頁）
-     */
-    static ItemStack oreTab(boolean current, int page, int maxPage) {
-        List<String> lore = new ArrayList<>();
-        if (current) {
-            lore.add("§a目前在這一頁");
-            if (maxPage > 1) {
-                lore.add("§7第 §f" + (page + 1) + "§7/§f" + maxPage + " §7頁");
-                lore.add("§e左鍵 §7下一頁　§e右鍵 §7上一頁");
-            }
-        } else {
-            lore.add("§7挖方塊時身上放不下的東西會收進來");
-            lore.add("§7每個分流都是同一個倉庫");
-            lore.add("§e左鍵 §7打開");
-        }
-        return ItemManage.createItem(Material.PAPER, "§f礦物倉庫", lore, current ? CMD_ORE_TAB_CURRENT : CMD_ORE_TAB);
-    }
-
-    /**
-     * 礦物倉庫畫面上的背包頁籤（沒有讀背包，不顯示頁名）
+     * 倉庫畫面上的背包頁籤（沒有讀背包，不顯示頁名）
      *
      * @param page     第幾頁（0 起算，也是第幾個頁籤）
      * @param bagPages 背包可用頁數
@@ -161,7 +140,7 @@ final class BagMenu {
         return Math.max(0, Math.min(page - TAB_COUNT / 2, maxPage - TAB_COUNT));
     }
 
-    private static ItemStack tab(BagSession session, int page, int position, int maxPage, boolean canRename) {
+    private static ItemStack tab(BagSession session, int page, int position, int maxPage, boolean canRename, boolean canEdit) {
         if (page >= maxPage) {
             return ItemManage.createItem(Material.PAPER, "§8第 " + (page + 1) + " 頁（未開放）",
                     List.of("§7升級 VIP 可以多開一頁（每頁 45 格）"), CMD_TAB_LOCKED);
@@ -173,21 +152,19 @@ final class BagMenu {
         List<String> lore = new ArrayList<>();
         lore.add(current ? "§a目前在這一頁" : "§e左鍵 §7切換到這一頁");
         if (canRename) lore.add("§e右鍵 §7幫這一頁取名字");
+        if (current) {
+            lore.add("§7整個背包已使用 §f" + used(session) + "§7/§f" + session.maxSlot() + " 格");
+            if (!canEdit) lore.add("§e唯讀模式");
+        }
         return ItemManage.createItem(Material.PAPER, name, lore, (current ? CMD_TAB_CURRENT : CMD_TAB) + position);
     }
 
-    private static ItemStack info(BagSession session, int maxPage, boolean canEdit) {
+    private static int used(BagSession session) {
         int used = 0;
         for (int slot : session.items().keySet()) {
             if (slot < session.maxSlot()) used++;
         }
-        used += session.brokenSlots().size();
-
-        List<String> lore = new ArrayList<>();
-        lore.add("§7目前頁數: §f" + (session.page() + 1) + "§7/§f" + maxPage);
-        lore.add("§7已使用: §f" + used + "§7/§f" + session.maxSlot() + " 格");
-        if (!canEdit) lore.add("§e唯讀模式");
-        return ItemManage.createItem(Material.BOOK, "§b背包資訊", lore, CMD_BUTTON);
+        return used + session.brokenSlots().size();
     }
 
     private static ItemStack lockedSlot() {

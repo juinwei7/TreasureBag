@@ -6,13 +6,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.weiwei.treasureBag.command.MainCommand;
 import org.weiwei.treasureBag.command.OreAliasCommand;
 import org.weiwei.treasureBag.dataBase.DataBase;
-import org.weiwei.treasureBag.listener.OreListener;
 import org.weiwei.treasureBag.listener.PlayerBagListener;
+import org.weiwei.treasureBag.listener.VaultListener;
 import org.weiwei.treasureBag.service.BagStorage;
 import org.weiwei.treasureBag.service.BagTitle;
 import org.weiwei.treasureBag.service.OreImporter;
-import org.weiwei.treasureBag.service.OreService;
 import org.weiwei.treasureBag.service.PlayerBagService;
+import org.weiwei.treasureBag.service.VaultKind;
+import org.weiwei.treasureBag.service.VaultService;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.Message;
 
@@ -47,9 +48,10 @@ public final class Main extends JavaPlugin {
         // IO 執行緒啟動時會先補寫上次停用沒存進去的背包（plugins/TreasureBag/unsaved）
         BagStorage.start();
 
-        // 礦物倉庫：先把這台 ExtraStorage 的舊資料匯進來（只有第一次有檔案），再幫在線玩家讀倉庫
+        // 倉庫：先把這台 ExtraStorage 的舊資料匯進礦物倉庫（只有第一次有檔案），再幫在線玩家讀兩種倉庫
+        VaultKind.reloadAll();
         OreImporter.run();
-        OreService.start();
+        VaultService.ALL.forEach(VaultService::start);
 
         MainCommand mainCommand = new MainCommand();
         mainCommand.setup(COMMAND);
@@ -57,17 +59,17 @@ public final class Main extends JavaPlugin {
         ORE_COMMAND.forEach(command -> getCommand(command).setExecutor(oreAlias));
 
         Bukkit.getPluginManager().registerEvents(new PlayerBagListener(), this);
-        Bukkit.getPluginManager().registerEvents(new OreListener(), this);
+        Bukkit.getPluginManager().registerEvents(new VaultListener(), this);
         BagTitle.setup(this);
 
     }
 
     @Override
     public void onDisable() {
-        // 先存還開著的背包與排隊中的存檔（礦物倉庫的工作也在同一個佇列），再寫礦物倉庫還沒送出的，最後關連線池
+        // 先存還開著的背包與排隊中的存檔（倉庫的工作也在同一個佇列），再寫兩種倉庫還沒送出的，最後關連線池
         if (DataBase.isReady()) {
             PlayerBagService.shutdown();
-            OreService.shutdown();
+            VaultService.ALL.forEach(VaultService::shutdown);
         }
         DataBase.close();
     }

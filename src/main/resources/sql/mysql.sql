@@ -64,7 +64,26 @@ CREATE TABLE IF NOT EXISTS `player_ore_setting`
     space          BIGINT
 );
 
--- ore_import：已匯入的 ExtraStorage 資料檔（分流名稱＋檔案 MD5），同一份檔案只匯入一次
+-- player_material：副本素材倉庫（每人每種素材一列，material 放 MythicMobs 物品代號、amount 是件數），加減規則同 player_ore；
+-- 代號是中文，明寫 utf8mb4，不看資料庫的預設字元集
+CREATE TABLE IF NOT EXISTS `player_material`
+(
+    player_uuid    VARCHAR(64) NOT NULL,
+    material       VARCHAR(64) NOT NULL,
+    amount         BIGINT      NOT NULL DEFAULT 0,
+    auto_collect   INT         NOT NULL DEFAULT 1,
+    PRIMARY KEY (player_uuid, material)
+) DEFAULT CHARSET = utf8mb4;
+
+-- player_material_setting：副本素材倉庫的總開關與個別容量（space 為 NULL 表示照 VIP 階級）
+CREATE TABLE IF NOT EXISTS `player_material_setting`
+(
+    player_uuid    VARCHAR(64) NOT NULL PRIMARY KEY,
+    enabled        INT         NOT NULL DEFAULT 1,
+    space          BIGINT
+) DEFAULT CHARSET = utf8mb4;
+
+-- ore_import：已匯入的 ExtraStorage 資料檔（分流名稱＋檔案 MD5），同一份檔案只匯入一次；兩種倉庫開機補寫暫存檔的記號也記在這裡
 CREATE TABLE IF NOT EXISTS `ore_import`
 (
     source         VARCHAR(128) NOT NULL PRIMARY KEY,

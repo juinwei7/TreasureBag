@@ -8,7 +8,7 @@ import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.sqlite.SQLiteConfig;
 import org.weiwei.treasureBag.Main;
-import org.weiwei.treasureBag.data.OreRepository;
+import org.weiwei.treasureBag.data.VaultRepository;
 
 import java.io.File;
 import java.io.InputStream;
@@ -70,7 +70,7 @@ public final class OreImporter {
             long oldDefaultSpace = oldConfig.getLong("MaxSpace", OLD_DEFAULT_SPACE);
             if (!table.matches("[A-Za-z0-9_]+")) throw new IllegalStateException("ExtraStorage 資料表名稱不合法: " + table);
 
-            List<OreRepository.Imported> players = new ArrayList<>();
+            List<VaultRepository.Imported> players = new ArrayList<>();
             List<Unknown> unknown = new ArrayList<>();
             int skipped = read(file, table, oldDefaultSpace, players, unknown);
 
@@ -101,8 +101,8 @@ public final class OreImporter {
     /**
      * 整份同一筆交易；玩家剛好在別台建立倉庫會撞主鍵、整筆退回，重讀再來（最多 3 次）
      */
-    private static boolean importWithRetry(String source, List<OreRepository.Imported> players, String server) {
-        OreRepository repository = new OreRepository();
+    private static boolean importWithRetry(String source, List<VaultRepository.Imported> players, String server) {
+        VaultRepository repository = VaultRepository.ORE;
         for (int attempt = 1; ; attempt++) {
             try {
                 return repository.importPlayers(source, players, server);
@@ -119,7 +119,7 @@ public final class OreImporter {
      * @return 略過（全部是 0、沒改過設定）的玩家數
      */
     private static int read(File file, String table, long oldDefaultSpace,
-                            List<OreRepository.Imported> players, List<Unknown> unknown) throws Exception {
+                            List<VaultRepository.Imported> players, List<Unknown> unknown) throws Exception {
         SQLiteConfig config = new SQLiteConfig();
         config.setReadOnly(true);
         int skipped = 0;
@@ -143,7 +143,7 @@ public final class OreImporter {
                     skipped++;
                     continue;
                 }
-                players.add(new OreRepository.Imported(UUID.fromString(uuid), enabled, customSpace, amounts, auto));
+                players.add(new VaultRepository.Imported(UUID.fromString(uuid), enabled, customSpace, amounts, auto));
             }
         }
         return skipped;

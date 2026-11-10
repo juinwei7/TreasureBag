@@ -5,7 +5,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
-import org.weiwei.treasureBag.service.OreService;
+import org.weiwei.treasureBag.service.VaultService;
 import org.weiwei.treasureBag.util.Message;
 
 /**
@@ -16,7 +16,7 @@ public class OreAliasCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String @NotNull [] args) {
         if (sender instanceof Player player) {
-            OreService.open(player);
+            VaultService.ORE.open(player);
         } else {
             Message.send(sender, Message.MESSAGE__PLAYER_ONLY);
         }

@@ -5,6 +5,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.weiwei.treasureBag.Main;
 import org.weiwei.treasureBag.command.SubCommand;
 import org.weiwei.treasureBag.dataBase.DataBase;
+import org.weiwei.treasureBag.service.VaultKind;
 import org.weiwei.treasureBag.util.ConfigManager;
 import org.weiwei.treasureBag.util.Message;
 
@@ -26,6 +27,7 @@ public class ReloadCommand extends SubCommand {
     public void onCommand(CommandSender sender, String[] args) {
         new ConfigManager(Main.getInst()).reload();
         Message.loadMessage();
+        VaultKind.reloadAll();
         Message.sendPrefix(sender, Message.MESSAGE__RELOAD_ALL);
 
         // reload 不會重建資料庫連線池；若 DataBase.yml 的 type 已改動，

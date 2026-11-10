@@ -5,9 +5,10 @@ main: org.weiwei.treasureBag.Main
 api-version: '1.21.11'
 load: POSTWORLD
 
-# Minepacks 為選用：只有 /treasurebag trade 轉移時需要；Hu_custom 為選用：查玩家有沒有裝材質包（Redis 旗標）
+# Minepacks 為選用：只有 /treasurebag trade 轉移時需要；Hu_custom 為選用：查玩家有沒有裝材質包（Redis 旗標）；
+# MythicMobs 為選用：副本素材倉庫取出時照代號產生物品（沒裝就只能看不能取）
 # 宣告 softdepend 確保載入順序
-softdepend: [Minepacks, Hu_custom]
+softdepend: [Minepacks, Hu_custom, MythicMobs]
 
 commands:
   treasurebag: {}

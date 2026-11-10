@@ -68,6 +68,24 @@ MESSAGE:
     - '§e/bag oreadmin space <玩家> <件數|default> §7個別容量（default＝照 VIP 階級）'
     - '§e/bag oreadmin import §7重跑這台的 ExtraStorage 匯入（主控台）'
   ORE_IMPORT_RESULT: '§e{0}'
+  VAULT_ITEM_MISSING: '§c這個物品暫時產生不了，取不出來，請截圖回報管理員'
+  MATERIAL_LOAD_FAILED: '§c副本素材倉庫暫時讀不到，請稍後再試'
+  MATERIAL_FULL: '§c副本素材倉庫滿了（§f{0}§c/§f{1}§c 件）'
+  MATERIAL_WITHDRAWN: '§a從副本素材倉庫取出 §f{0} §a個'
+  MATERIAL_DEPOSITED: '§a存進副本素材倉庫 §f{0} §a個'
+  MATERIAL_FORBIDDEN: '§c副本素材倉庫只收副本素材'
+  MATERIAL_REMOVED: '§7已從副本素材倉庫清單移除（之後撿到會再收進來）'
+  MATERIAL_VIP_ONLY: '§c副本素材倉庫限 VIP 以上使用'
+  MATERIAL_HINT: '§7撿到的副本素材會直接收進 §f副本素材倉庫§7，鍛造、兌換前先用 §e/bag material §7或背包右下角的分頁取出；不想自動收可以在倉庫裡關掉'
+  MATERIAL_UNKNOWN_ITEM: '§c副本素材倉庫不收 {0}（要用 MythicMobs 物品代號，而且要列在 Config.yml 的 MATERIAL.ITEMS）'
+  MATERIAL_ADMIN_ADDED: '§a已幫 §f{0} §a的副本素材倉庫加入 §f{1} x{2}'
+  MATERIAL_ADMIN_TAKEN: '§a已從 §f{0} §a的副本素材倉庫扣除 §f{1} x{2}'
+  MATERIAL_ADMIN_SPACE: '§a已把 §f{0} §a的副本素材倉庫容量設為 §f{1} §a件'
+  MATERIAL_ADMIN_SPACE_DEFAULT: '§a已把 §f{0} §a的副本素材倉庫容量改回照 VIP 階級'
+  MATERIAL_ADMIN_USAGE:
+    - '§e/bag materialadmin add <玩家> <代號> <數量> §7補發'
+    - '§e/bag materialadmin take <玩家> <代號> <數量> §7扣除（不夠就扣光）'
+    - '§e/bag materialadmin space <玩家> <件數|default> §7個別容量（default＝照 VIP 階級）'
   DB_TYPE_CHANGED: '§e偵測到 DataBase.yml 的 type 已改為 §f{0}§e，資料庫設定需重啟伺服器才會生效（目前仍使用 §f{1}§e）'
 
 # 時間格式
@@ -88,6 +106,8 @@ COMMAND:
   LOG: 查看玩家的背包存取紀錄
   ORE: 打開礦物倉庫
   ORE_ADMIN: 管理玩家的礦物倉庫
+  MATERIAL: 打開副本素材倉庫
+  MATERIAL_ADMIN: 管理玩家的副本素材倉庫
 
 ADMIN_MESSAGE:
   EDIT_DISABLED: '已停用'
@@ -98,6 +118,7 @@ MENU_TITLE:
   VIEW_MENU: '§r       §r§9◆§3◆§9◆     §1§l隨身背包     §9◆§3◆§9◆'
   BAG_MENU: '§1§l隨身背包 §7- 第 {0}/{1} 頁'
   ORE_MENU: '§1§l礦物倉庫'
+  MATERIAL_MENU: '§1§l副本素材'
 
 # 選單物品
 MENU_ITEM:

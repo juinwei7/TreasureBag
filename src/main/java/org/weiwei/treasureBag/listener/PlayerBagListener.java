@@ -10,6 +10,7 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
 import org.weiwei.treasureBag.customGui.CustomGui;
 import org.weiwei.treasureBag.customGui.GuiType;
+import org.weiwei.treasureBag.service.OverflowService;
 import org.weiwei.treasureBag.service.PlayerBagService;
 import org.weiwei.treasureBag.util.Message;
 
@@ -18,6 +19,12 @@ public class PlayerBagListener implements Listener {
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        // 超出格取出介面：所有點擊（含身上、shift、數字鍵、雙擊收集）一律取消，物品只靠程式移動
+        if (CustomGui.isCustomGui(event.getView().getTopInventory(), GuiType.OVERFLOW_MENU) != null) {
+            OverflowService.click(player, event);
+            return;
+        }
 
         CustomGui gui = CustomGui.isCustomGui(event.getView().getTopInventory(), GuiType.BAG_MENU);
         if (gui == null) return;
@@ -65,6 +72,12 @@ public class PlayerBagListener implements Listener {
     public void onInventoryDrag(InventoryDragEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
+        // 超出格取出介面：拖曳一律擋（連拖在自己身上的也擋，跟點擊一樣不讓原版移物品）
+        if (CustomGui.isCustomGui(event.getView().getTopInventory(), GuiType.OVERFLOW_MENU) != null) {
+            event.setCancelled(true);
+            return;
+        }
+
         CustomGui gui = CustomGui.isCustomGui(event.getView().getTopInventory(), GuiType.BAG_MENU);
         if (gui == null) return;
 
@@ -88,6 +101,11 @@ public class PlayerBagListener implements Listener {
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
+
+        if (CustomGui.isCustomGui(event.getInventory(), GuiType.OVERFLOW_MENU) != null) {
+            OverflowService.close(player, event.getInventory());
+            return;
+        }
 
         CustomGui gui = CustomGui.isCustomGui(event.getInventory(), GuiType.BAG_MENU);
         if (gui == null) return;

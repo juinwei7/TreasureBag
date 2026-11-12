@@ -6,7 +6,7 @@
 
     <groupId>org.weiwei</groupId>
     <artifactId>TreasureBag</artifactId>
-    <version>1.4.0</version>
+    <version>1.4.1</version>
     <packaging>jar</packaging>
 
     <name>TreasureBag</name>
@@ -157,6 +157,14 @@
             <artifactId>Mythic-Dist</artifactId>
             <version>5.7.1</version>
             <scope>provided</scope>
+        </dependency>
+
+        <!--    單元測試（只測不碰 Bukkit 的純計算，不會進 jar）    -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>

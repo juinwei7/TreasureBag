@@ -47,6 +47,19 @@ public class ItemManage {
     }
 
     /**
+     * 創建物品（含說明，不設 CustomModelData：材質包沒有對應圖示的按鈕維持原版外觀）
+     * @return ItemStack
+     */
+    public static ItemStack createItem(Material material, String name, List<String> lore) {
+        ItemStack item = new ItemStack(material, 1);
+        ItemMeta itemMeta = item.getItemMeta();
+        itemMeta.setDisplayName(name);
+        if (lore != null) itemMeta.setLore(lore);
+        item.setItemMeta(itemMeta);
+        return item;
+    }
+
+    /**
      * 讀不出來的格位佔位物品（該格資料保留在資料庫，不能操作）
      */
     public static ItemStack getBrokenItem() {

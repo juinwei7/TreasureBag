@@ -20,6 +20,10 @@ public class BagChanges {
     public static final String SOURCE_CLOSE = "close";
     /** 紀錄來源：強制開啟掉落溢出物品 */
     public static final String SOURCE_FORCE = "force";
+    /** 紀錄來源：超出格取出介面拿到身上 */
+    public static final String SOURCE_OVERFLOW = "overflow";
+    /** 紀錄來源：超出格取出刪完資料庫卻沒交出（人下線、外掛停用），寫回原格 */
+    public static final String SOURCE_OVERFLOW_RETURN = "overflow_return";
 
     private final UUID owner;
     private final String ownerName;

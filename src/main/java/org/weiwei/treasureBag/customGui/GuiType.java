@@ -18,6 +18,9 @@ public enum GuiType {
     // 隨身背包
     BAG_MENU(Message.MENU_TITLE__BAG_MENU, 54),
 
+    // 隨身背包格數變少時，把超出的格子拿到身上
+    OVERFLOW_MENU(Message.MENU_TITLE__OVERFLOW_MENU, 54),
+
     // 礦物倉庫（背包裡的分頁）
     ORE_MENU(Message.MENU_TITLE__ORE_MENU, 54),
 

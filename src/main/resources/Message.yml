@@ -24,10 +24,13 @@ MESSAGE:
   PLUGIN_DISABLED: '§c系統重新加載中，請稍後再試'
   ERROR: '§c發生錯誤 {0}'
   SUCCESS: '§a執行成功 {0}'
-  BAG_SPACE_SHRINK: '§c你的隨身背包空間已縮小，§f{0} §c格超出目前可用範圍。若繼續開啟，超出的物品會掉落在地板上。'
-  BAG_FORCE_CLICK: '§e§l[點擊這裡強制開啟隨身背包]'
-  BAG_FORCE_HOVER: '§f執行 /treasurebag force，並將超出格物品掉落到地板上'
   BAG_FORCE_DROPPED: '§e已將 §f{0} §e格超出背包空間的物品掉落到地板上'
+  BAG_OVERFLOW_NOTICE: '§e你的隨身背包格數變少了，有 §f{0} §e格超出現在能用的範圍。東西都還在，點一下就拿到身上，拿完就能正常開背包'
+  BAG_OVERFLOW_TAKEN: '§a已拿到身上，超出格還剩 §f{0} §a格'
+  BAG_OVERFLOW_NO_ROOM: '§c身上滿了，先騰出空位再拿'
+  BAG_OVERFLOW_DROPPED: '§e拿的時候身上剛好被塞滿，有 §f{0} §e個掉在你腳邊（只有你撿得起來），記得撿'
+  BAG_OVERFLOW_DONE: '§a超出格都拿完了，按「回到背包」就能正常使用背包'
+  BAG_OVERFLOW_BACK_BLOCKED: '§c還有 §f{0} §c格超出格沒拿完。背包格數變少了，超出的格子要先清空，才能正常開背包'
   BAG_CONTAINER_FORBIDDEN: '§c界伏盒、收納袋等可攜式容器不能放入隨身背包'
   BAG_TARGET_IN_USE: '§c目標玩家目前正在使用背包，請等待對方關閉後再試'
   BAG_OWNER_IN_USE: '§c管理員正在查看你的隨身背包，請稍後再開'
@@ -101,7 +104,7 @@ FORMAT:
 COMMAND:
   OPEN: 開啟隨身背包
   RELOAD: 重新載入設定
-  FORCE: 強制開啟隨身背包
+  FORCE: （管理員）強制開啟自己的背包，超出格物品掉在腳下
   NAME: 幫背包頁面取名字
   LOG: 查看玩家的背包存取紀錄
   ORE: 打開礦物倉庫
@@ -117,6 +120,7 @@ MENU_TITLE:
   ADMIN_MENU: '&1隨身背包: %player%'
   VIEW_MENU: '§r       §r§9◆§3◆§9◆     §1§l隨身背包     §9◆§3◆§9◆'
   BAG_MENU: '§1§l隨身背包 §7- 第 {0}/{1} 頁'
+  OVERFLOW_MENU: '§1§l隨身背包 §8· §4超出格取出'
   ORE_MENU: '§1§l礦物倉庫'
   MATERIAL_MENU: '§1§l副本素材'
 

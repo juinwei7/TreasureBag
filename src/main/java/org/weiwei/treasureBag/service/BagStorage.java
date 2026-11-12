@@ -220,7 +220,7 @@ public class BagStorage {
     }
 
     /**
-     * 直接寫回指定格位（強制開啟刪完溢出格後人卻下線時，把物品寫回去）
+     * 直接寫回指定格位（強制開啟、超出格取出刪完溢出格後人卻下線時，把物品寫回去）
      * 失敗就放進重試佇列，不讓物品消失
      */
     static void restore(BagChanges changes) {
@@ -234,6 +234,24 @@ public class BagStorage {
             }
             return null;
         });
+    }
+
+    /**
+     * 停用流程用（IO 執行緒已經關了）：在目前執行緒用嚴格模式直接寫入，寫不進去就存成檔案、下次啟動補寫
+     * 超出格取出刪完資料庫、還沒交給玩家就遇到停用，人又不在線上時，用它把物品寫回原格
+     */
+    static void writeNow(BagChanges changes) {
+        if (changes.isEmpty()) return;
+        writeStrictOrDump(changes);
+    }
+
+    /**
+     * 不確定資料庫有沒有改到的變更：不寫入，另存成 conflict 檔交給管理員比對（開機不會自動補寫）
+     */
+    static void dumpForReview(BagChanges changes, String reason) {
+        logSevere(reason + "，已另存 conflict 檔: " + changes.ownerName() + " 格位 "
+                + changes.changes().stream().map(c -> c.slot() + ":" + c.itemName()).toList(), null);
+        dump(changes, "-conflict");
     }
 
     /**

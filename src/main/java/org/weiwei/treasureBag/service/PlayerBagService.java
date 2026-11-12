@@ -1,7 +1,6 @@
 package org.weiwei.treasureBag.service;
 
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
 import org.bukkit.Bukkit;
@@ -57,7 +56,7 @@ public class PlayerBagService {
 
     /** 觀看者 → 開著的背包 */
     private static final Map<UUID, BagSession> SESSIONS = new HashMap<>();
-    /** 背包擁有者 → 正在讀取或開著它的觀看者 */
+    /** 背包擁有者 → 正在讀取或開著它（背包或超出格取出介面）的觀看者 */
     private static final Map<UUID, UUID> OWNERS = new HashMap<>();
     /** 正在讀取背包的觀看者（重複開啟直接忽略） */
     private static final Set<UUID> LOADING = new HashSet<>();
@@ -66,9 +65,9 @@ public class PlayerBagService {
     private static final Map<UUID, Long> LAST_ACTION = new HashMap<>();
 
     private enum Mode {
-        /** 一般開啟：有溢出物品就先警告 */
+        /** 一般開啟：有溢出物品就改開超出格取出介面（{@link OverflowService}） */
         NORMAL,
-        /** 強制開啟：溢出物品掉落到地上 */
+        /** 強制開啟（管理員指令）：溢出物品掉落到地上 */
         FORCE,
         /** 管理員查看：不檢查溢出，只顯示可用範圍 */
         ADMIN
@@ -94,6 +93,7 @@ public class PlayerBagService {
 
     /**
      * 強制開啟背包：將超出權限格數的物品掉落到地上，再開啟背包
+     * 只剩管理員指令會用（/treasurebag force）；玩家一般開啟遇到超出格是開超出格取出介面，不會掉地上
      */
     public static void forceOpen(Player player) {
         request(player, player.getUniqueId(), player.getName(), getMaxSlot(player), Mode.FORCE, false, 0);
@@ -155,6 +155,8 @@ public class PlayerBagService {
 
         // 觀看者已經開著背包（例如管理員看完別人再開自己的）：先存檔結束，讀取會排在這次存檔之後
         finishSession(viewer);
+        // 開著超出格取出介面（例如拿完按「回到背包」）：先結束、放掉鎖，讀取會排在處理中的取出之後
+        OverflowService.finish(viewer);
 
         UUID holder = OWNERS.get(owner);
         if (holder != null && !holder.equals(viewerId)) {
@@ -199,8 +201,8 @@ public class PlayerBagService {
         }
 
         if (mode == Mode.NORMAL) {
-            OWNERS.remove(owner, viewerId);
-            sendOverflowWarning(viewer, overflow.size());
+            // 不開背包、也不掉地上：改開超出格取出介面，讓玩家一格一格拿到身上。擁有者鎖繼續佔著，介面關掉才放
+            OverflowService.open(viewer, bag.playerInfo(), maxSlot, overflow, bag.baseline());
             return;
         }
 
@@ -663,6 +665,8 @@ public class PlayerBagService {
             line.append(" §8（").append(log.viewerName()).append(" 操作）");
         }
         if (BagChanges.SOURCE_FORCE.equals(log.source())) line.append(" §8（強制開啟掉落）");
+        if (BagChanges.SOURCE_OVERFLOW.equals(log.source())) line.append(" §8（超出格取出）");
+        if (BagChanges.SOURCE_OVERFLOW_RETURN.equals(log.source())) line.append(" §8（超出格沒交出，寫回原格）");
         String vault = VaultKind.logLabel(log.source());
         if (vault != null) line.append(" §8（").append(vault).append("）");
         return line.toString();
@@ -744,6 +748,7 @@ public class PlayerBagService {
      * 不在這裡存掉的話，放進去的會消失、拿出來的會複製
      */
     public static void shutdown() {
+        OverflowService.shutdown();
         List<BagSession.Snapshot> snapshots = new ArrayList<>();
         List<Player> viewers = new ArrayList<>();
         for (Map.Entry<UUID, BagSession> entry : new ArrayList<>(SESSIONS.entrySet())) {
@@ -765,6 +770,15 @@ public class PlayerBagService {
         LAST_ACTION.clear();
         viewers.forEach(Player::closeInventory);
         BagStorage.shutdown(snapshots);
+        // IO 執行緒都結束了：超出格取出刪完資料庫、還沒交出的在這裡給玩家或寫回
+        OverflowService.settleAfterShutdown();
+    }
+
+    /**
+     * 放掉擁有者鎖（只有登記的是這位觀看者才放）；超出格取出介面關掉時用
+     */
+    static void releaseOwner(UUID owner, UUID viewer) {
+        OWNERS.remove(owner, viewer);
     }
 
     /**
@@ -792,22 +806,6 @@ public class PlayerBagService {
      */
     public static boolean hasSession(UUID uuid) {
         return SESSIONS.containsKey(uuid);
-    }
-
-    /**
-     * 傳送溢出警告訊息，並提供可點擊的強制開啟指令連結
-     *
-     * @param player        玩家
-     * @param overflowCount 溢出物品數量
-     */
-    private static void sendOverflowWarning(Player player, int overflowCount) {
-        Message.sendPrefix(player, Message.MESSAGE__BAG_SPACE_SHRINK, overflowCount);
-
-        TextComponent forceMessage = Component.text(Message.getMsg(Message.MESSAGE__PREFIX))
-                .append(Component.text(Message.getMsg(Message.MESSAGE__BAG_FORCE_CLICK))
-                        .clickEvent(ClickEvent.runCommand("/treasurebag force"))
-                        .hoverEvent(HoverEvent.showText(Component.text(Message.getMsg(Message.MESSAGE__BAG_FORCE_HOVER)))));
-        player.sendMessage(forceMessage);
     }
 
     /**

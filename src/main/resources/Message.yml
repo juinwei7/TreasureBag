@@ -134,4 +134,4 @@ MENU_ITEM:
 # 指令提示
 HELP:
   FIRST_LINE: '&r&7           &r §a隨身背包 &r&7           &r'
-  HOVER: '&r&點擊以自動補上指令'
+  HOVER: '&7點一下填入指令'

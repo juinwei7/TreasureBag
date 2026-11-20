@@ -96,7 +96,7 @@ public class MainCommand implements CommandExecutor, TabCompleter {
         String cmd = args[0];
         SubCommand sub = SubCommand.getSubCommandMap().get(cmd);
         if (sub == null) {
-            sendHelp(sender);
+            sendHelp(sender, label);
             return true;
         } else {
 
@@ -115,7 +115,7 @@ public class MainCommand implements CommandExecutor, TabCompleter {
 
             // 參數檢查
             if (args.length == 1 && sub.arg != null && !sub.arg.isEmpty()) {
-                Message.send(sender, Message.MESSAGE__UNKNOWN_COMMAND, "&f/" + sub.cmd + " " + sub.arg);
+                Message.send(sender, Message.MESSAGE__UNKNOWN_COMMAND, "&f/" + label + " " + sub.cmd + " " + sub.arg);
                 return true;
             }
 
@@ -146,7 +146,7 @@ public class MainCommand implements CommandExecutor, TabCompleter {
 
 
     // 顯示幫助信息
-    private void sendHelp(CommandSender sender) {
+    private void sendHelp(CommandSender sender, String label) {
         if (!(sender instanceof Player player)) {
             Message.send(sender, Message.MESSAGE__PLAYER_ONLY);
             return;
@@ -156,9 +156,9 @@ public class MainCommand implements CommandExecutor, TabCompleter {
                 .filter(sub -> sub.isUse(getType(sender)))
                 .filter(sub -> sub.canUsePermission(sender))
                 .forEach(sub -> {
-                    TextComponent line = Component.text("§b/" + sub.cmd + " " + sub.arg)
+                    TextComponent line = Component.text("§b/" + label + " " + sub.cmd + " " + sub.arg)
                             .hoverEvent(HoverEvent.showText(Component.text(Message.getMsg(Message.HELP__HOVER))))
-                            .clickEvent(ClickEvent.suggestCommand("/" + sub.cmd + " " + sub.arg))
+                            .clickEvent(ClickEvent.suggestCommand("/" + label + " " + sub.cmd + " " + sub.arg))
                             .append(Component.text(" §7- " + sub.description));
 
                     player.sendMessage(line);

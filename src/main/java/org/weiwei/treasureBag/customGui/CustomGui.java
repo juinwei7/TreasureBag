@@ -10,7 +10,6 @@ import org.bukkit.inventory.InventoryHolder;
 import org.weiwei.treasureBag.customGui.event.GuiClickInterface;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * ################################################
@@ -28,9 +27,6 @@ public class CustomGui implements InventoryHolder {
     private final Inventory inventory; // GUI 介面
     private final Player player; // 玩家
     private final GuiType guiType; // GUI 類型
-
-    @Setter
-    private UUID tagerUuid;
 
     @Setter
     private int page;
@@ -54,10 +50,6 @@ public class CustomGui implements InventoryHolder {
         this.inventory = Bukkit.createInventory(this, type.getSize(), title);
     }
 
-
-    public boolean isGuiType(GuiType type) {
-        return this.guiType == type;
-    }
 
     public void open(GuiClickInterface guiClickInterface) {
         guiClickInterface.setDefaultItem(this);

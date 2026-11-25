@@ -23,7 +23,6 @@ import org.weiwei.treasureBag.command.sub.VaultCommand;
 import org.weiwei.treasureBag.service.PlayerBagService;
 import org.weiwei.treasureBag.service.VaultKind;
 import org.weiwei.treasureBag.util.Message;
-import org.weiwei.treasureBag.util.PlaceholderUtil;
 
 import java.util.Arrays;
 import java.util.Collections;

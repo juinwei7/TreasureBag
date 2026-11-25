@@ -8,7 +8,6 @@ import org.weiwei.treasureBag.entity.PlayerInfo;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -176,24 +175,6 @@ public class PlayerBagRepository {
             }
         } catch (Exception e) {
             throw new IllegalStateException("無法保存玩家背包資料: " + playerInfo.getPlayerName(), e);
-        }
-    }
-
-    public void deletePlayerBagsFromSlot(PlayerInfo playerInfo, int startSlot) {
-        if (playerInfo == null || playerInfo.getPlayerUUID() == null) return;
-
-        try (Connection connection = DataBase.getConnection()) {
-            if (connection == null) throw new IllegalStateException("資料庫連線不可用");
-
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "DELETE FROM player_bag WHERE player_uuid = ? AND solder >= ?"
-            )) {
-                statement.setString(1, playerInfo.getPlayerUUID().toString());
-                statement.setInt(2, startSlot);
-                statement.executeUpdate();
-            }
-        } catch (Exception e) {
-            throw new IllegalStateException("無法刪除玩家超出背包格資料: " + playerInfo.getPlayerName(), e);
         }
     }
 

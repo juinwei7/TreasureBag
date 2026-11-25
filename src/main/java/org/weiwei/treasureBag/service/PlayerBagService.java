@@ -799,16 +799,6 @@ public class PlayerBagService {
     }
 
     /**
-     * 判斷指定 UUID 的玩家是否正在使用背包（有活躍的 BagSession）
-     *
-     * @param uuid 玩家 UUID
-     * @return true 表示玩家目前正在使用背包
-     */
-    public static boolean hasSession(UUID uuid) {
-        return SESSIONS.containsKey(uuid);
-    }
-
-    /**
      * 依現有背包資料推算 maxSlot（對齊至 PAGE_CONTENT_SIZE 的倍數）
      * 用於管理員查看不在這台的玩家，避免存入超出玩家實際權限的格位
      *
@@ -840,22 +830,6 @@ public class PlayerBagService {
                 .filter(key -> player.hasPermission("treasure-bag." + key))
                 .map(key -> ConfigManager.getConfig().getInt("MAX_SLOT." + key, 0))
                 .max(Comparator.naturalOrder())
-                .orElse(0);
-    }
-
-    /**
-     * 取得設定檔中所有組別裡最大的格數
-     *
-     * @return 設定檔中最大格數；若無設定則回傳 0
-     */
-    public static int getMaxSlotFromConfig() {
-        if (ConfigManager.getConfig() == null || !ConfigManager.getConfig().isConfigurationSection("MAX_SLOT")) {
-            return 0;
-        }
-        return ConfigManager.getConfig().getConfigurationSection("MAX_SLOT").getKeys(false)
-                .stream()
-                .mapToInt(key -> ConfigManager.getConfig().getInt("MAX_SLOT." + key, 0))
-                .max()
                 .orElse(0);
     }
 }
